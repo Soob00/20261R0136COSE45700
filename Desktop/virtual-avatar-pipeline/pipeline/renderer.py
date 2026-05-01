@@ -30,23 +30,38 @@ RESOLUTION = (512, 512)
 BBOX_AREA_TARGET = 0.4
 
 
-def _make_camera_pose(yaw_deg: float, pitch_deg: float, distance: float = 1.5) -> np.ndarray:
+def _make_camera_pose(
+    yaw_deg: float,
+    pitch_deg: float,
+    distance: float = 1.5,
+    target: np.ndarray | None = None,
+) -> np.ndarray:
     """
     yaw  : Y축 회전 (좌우)
     pitch: X축 회전 (상하)
-    카메라가 원점을 바라보는 pose matrix 반환
+    카메라가 target을 바라보는 pose matrix 반환
     """
     yaw = math.radians(yaw_deg)
     pitch = math.radians(pitch_deg)
 
-    # 구면좌표 → 카메라 위치
     x = distance * math.sin(yaw) * math.cos(pitch)
     y = distance * math.sin(pitch)
     z = distance * math.cos(yaw) * math.cos(pitch)
-    cam_pos = np.array([x, y, z])
 
-    # look-at 행렬
-    forward = -cam_pos / np.linalg.norm(cam_pos)
+    target_pos = (
+        np.array([0.0, 0.0, 0.0], dtype=np.float64)
+        if target is None
+        else np.asarray(target, dtype=np.float64)
+    )
+    cam_pos = target_pos + np.array([x, y, z], dtype=np.float64)
+
+    forward = target_pos - cam_pos
+    forward_norm = np.linalg.norm(forward)
+    if forward_norm < 1e-9:
+        forward = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        forward_norm = 1.0
+    forward = forward / forward_norm
+
     world_up = np.array([0.0, 1.0, 0.0])
     right = np.cross(forward, world_up)
     if np.linalg.norm(right) < 1e-6:
@@ -68,7 +83,7 @@ def _load_scene(glb_path: str) -> pyrender.Scene:
     scene = pyrender.Scene(bg_color=[1.0, 1.0, 1.0, 1.0], ambient_light=[0.4, 0.4, 0.4])
 
     if isinstance(mesh_or_scene, trimesh.Scene):
-        for mesh in mesh_or_scene.geometry.values():
+        for mesh in _iter_scene_meshes_with_transforms(mesh_or_scene):
             if len(mesh.vertices) == 0:
                 continue
             pr_mesh = pyrender.Mesh.from_trimesh(mesh, smooth=False)
@@ -78,6 +93,24 @@ def _load_scene(glb_path: str) -> pyrender.Scene:
         scene.add(pr_mesh)
 
     return scene
+
+
+def _iter_scene_meshes_with_transforms(trimesh_scene: trimesh.Scene):
+    for node_name in trimesh_scene.graph.nodes_geometry:
+        try:
+            transform, geom_name = trimesh_scene.graph.get(node_name)
+        except Exception:
+            continue
+
+        geom = trimesh_scene.geometry.get(geom_name)
+        if geom is None:
+            continue
+        if not isinstance(geom, trimesh.Trimesh):
+            continue
+
+        mesh = geom.copy()
+        mesh.apply_transform(transform)
+        yield mesh
 
 
 def _add_lighting(scene: pyrender.Scene):
@@ -90,8 +123,8 @@ def _add_lighting(scene: pyrender.Scene):
     scene.add(fill, pose=_make_camera_pose(60, 10, 2.0))
 
 
-def _center_scene_bounds(glb_path: str) -> tuple[float, float]:
-    """GLB 로드 → 바운딩 박스 기준 distance 계산."""
+def _center_scene_bounds(glb_path: str) -> tuple[float, np.ndarray]:
+    """GLB 로드 → 바운딩 박스 기준 distance와 center 계산."""
     mesh_or_scene = trimesh.load(glb_path, force="scene")
     if isinstance(mesh_or_scene, trimesh.Scene):
         bounds = mesh_or_scene.bounds
@@ -99,12 +132,12 @@ def _center_scene_bounds(glb_path: str) -> tuple[float, float]:
         bounds = mesh_or_scene.bounds
 
     if bounds is None:
-        return 1.5, 0.0
+        return 1.5, np.array([0.0, 0.0, 0.0], dtype=np.float64)
 
-    center_y = (bounds[0][1] + bounds[1][1]) / 2.0
+    center_xyz = (bounds[0] + bounds[1]) / 2.0
     size = np.linalg.norm(bounds[1] - bounds[0])
-    distance = size * 1.2
-    return distance, center_y
+    distance = max(size * 1.2, 1e-3)
+    return distance, center_xyz
 
 
 def _compute_depth_mask(depth: np.ndarray) -> np.ndarray:
@@ -211,7 +244,7 @@ def render_multiview(glb_path: str, output_dir: str = None, resolution: tuple = 
     Returns:
         {view_name: PIL.Image} 딕셔너리
     """
-    distance, center_y = _center_scene_bounds(glb_path)
+    distance, center_xyz = _center_scene_bounds(glb_path)
 
     renderer = pyrender.OffscreenRenderer(*resolution)
     camera = pyrender.PerspectiveCamera(yfov=math.radians(40), aspectRatio=resolution[0] / resolution[1])
@@ -226,9 +259,12 @@ def render_multiview(glb_path: str, output_dir: str = None, resolution: tuple = 
         scene = _load_scene(glb_path)
         _add_lighting(scene)
 
-        cam_pose = _make_camera_pose(angles["yaw"], angles["pitch"], distance)
-        # Y축 center 보정
-        cam_pose[1, 3] += center_y
+        cam_pose = _make_camera_pose(
+            angles["yaw"],
+            angles["pitch"],
+            distance,
+            target=center_xyz,
+        )
         scene.add(camera, pose=cam_pose)
 
         color, depth = renderer.render(scene)

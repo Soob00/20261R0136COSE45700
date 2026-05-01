@@ -3,7 +3,7 @@ Image -> 3D avatar generation pipeline orchestration (Stage 2-6).
 
 Stage 2: Generate GLB with VARCO/Meshy API
 Stage 3: Render GLB multi-view images (front/left/right/quarter)
-Stage 4: Extract facial features with original-image priority and front-render fallback
+Stage 4: Extract facial features with front-render priority and original-image fallback
 Stage 5: Select cute/slim/mature template
 Stage 6: Map initial slider values
 """
@@ -120,52 +120,94 @@ def _stage3_render(glb_path: str, out: Path) -> tuple[dict, dict]:
 
 def _stage4_extract(image_path: str, renders: dict) -> tuple:
     """
-    Try both original image and front render, but always prefer original.
+    Try front render first, then fall back to the original image.
     """
-    print("[Stage 4] feature extraction (prefer original, diagnose front render)...")
+    print("[Stage 4] feature extraction (prefer front render, fallback to original)...")
 
     feature_debug = {
         "original": None,
         "front_render": None,
         "selected": None,
         "failures": [],
+        "attempts": {
+            "front_render": [],
+            "original": [],
+        },
     }
-    results = {}
-
-    sources = [("original", image_path)]
+    confidence_levels = (0.4, 0.3)
 
     front_render = renders.get("front")
-    if front_render is not None:
-        sources.append(("front_render", front_render))
-    else:
+    if front_render is None:
         feature_debug["failures"].append({
             "source": "front_render",
             "error": "front render missing",
         })
+    else:
+        for min_confidence in confidence_levels:
+            try:
+                feature_vector = extract_features(
+                    front_render,
+                    min_confidence=min_confidence,
+                )
+                if feature_vector is None:
+                    raise ValueError("face not detected")
 
-    for source_name, source_input in sources:
+                feature_debug["attempts"]["front_render"].append({
+                    "min_confidence": min_confidence,
+                    "success": True,
+                })
+                feature_debug["front_render"] = feature_vector.to_dict()
+                feature_debug["selected"] = "front_render"
+                print(
+                    "[Stage 4] front_render extracted "
+                    f"(min_confidence={min_confidence}): {feature_vector.to_dict()}"
+                )
+                return feature_vector, "front_render", feature_debug
+            except Exception as exc:
+                error_message = str(exc) or exc.__class__.__name__
+                attempt_error = f"min_confidence={min_confidence}: {error_message}"
+                feature_debug["attempts"]["front_render"].append({
+                    "min_confidence": min_confidence,
+                    "success": False,
+                    "error": error_message,
+                })
+                feature_debug["failures"].append(
+                    {"source": "front_render", "error": attempt_error}
+                )
+                print(f"[Stage 4] front_render failed: {attempt_error}")
+
+    for min_confidence in confidence_levels:
         try:
-            feature_vector = extract_features(source_input)
+            feature_vector = extract_features(
+                image_path,
+                min_confidence=min_confidence,
+            )
             if feature_vector is None:
                 raise ValueError("face not detected")
 
-            results[source_name] = feature_vector
-            feature_debug[source_name] = feature_vector.to_dict()
-            print(f"[Stage 4] {source_name} extracted: {feature_vector.to_dict()}")
+            feature_debug["attempts"]["original"].append({
+                "min_confidence": min_confidence,
+                "success": True,
+            })
+            feature_debug["original"] = feature_vector.to_dict()
+            feature_debug["selected"] = "original"
+            print(
+                "[Stage 4] original extracted "
+                f"(min_confidence={min_confidence}): {feature_vector.to_dict()}"
+            )
+            return feature_vector, "original", feature_debug
         except Exception as exc:
             error_message = str(exc) or exc.__class__.__name__
+            attempt_error = f"min_confidence={min_confidence}: {error_message}"
+            feature_debug["attempts"]["original"].append({
+                "min_confidence": min_confidence,
+                "success": False,
+                "error": error_message,
+            })
             feature_debug["failures"].append(
-                {"source": source_name, "error": error_message}
+                {"source": "original", "error": attempt_error}
             )
-            print(f"[Stage 4] {source_name} failed: {error_message}")
-
-    if "original" in results:
-        feature_debug["selected"] = "original"
-        return results["original"], "original", feature_debug
-
-    if "front_render" in results:
-        feature_debug["selected"] = "front_render"
-        return results["front_render"], "front_render", feature_debug
+            print(f"[Stage 4] original failed: {attempt_error}")
 
     failure_text = ", ".join(
         f"{item['source']}: {item['error']}" for item in feature_debug["failures"]

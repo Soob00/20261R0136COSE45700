@@ -3,10 +3,11 @@ Virtual Avatar Pipeline CLI (Stage 2-6)
 
 Examples:
     python main.py run --image face.jpg --api-key YOUR_API_KEY
+    python main.py run --image samples/01_input --api-key YOUR_API_KEY
     python main.py extract --image face.jpg
     python main.py run --image face.jpg --skip-3d --glb ./output/avatar.glb
     python main.py debug --image face.jpg
-    python main.py batch --images samples/a.png samples/b.png --save-json output/batch.json
+    python main.py batch --images samples --save-json output/batch.json
 """
 
 import argparse
@@ -24,8 +25,9 @@ from pipeline import (
 
 
 def cmd_run(args):
+    image_path = _resolve_image_arg(args.image)
     result = run_pipeline(
-        image_path=args.image,
+        image_path=image_path,
         output_dir=args.output,
         provider=args.provider,
         api_key=args.api_key,
@@ -37,8 +39,9 @@ def cmd_run(args):
 
 
 def cmd_extract(args):
-    print(f"[Extract] image: {args.image}")
-    feature_vector = extract_features(args.image)
+    image_path = _resolve_image_arg(args.image)
+    print(f"[Extract] image: {image_path}")
+    feature_vector = extract_features(image_path)
     if feature_vector is None:
         print("[Extract] face not detected")
         sys.exit(1)
@@ -58,15 +61,16 @@ def cmd_extract(args):
 
 
 def cmd_debug(args):
+    image_path = _resolve_image_arg(args.image)
     save_path = str(Path(args.output) / "landmarks_debug.png")
     Path(args.output).mkdir(parents=True, exist_ok=True)
-    image = visualize_landmarks(args.image, save_path=save_path)
+    image = visualize_landmarks(image_path, save_path=save_path)
     print(f"[Debug] landmark visualization saved: {save_path}")
     return image
 
 
 def cmd_batch_run(args):
-    images = args.images
+    images = _resolve_image_args(args.images)
     results = []
 
     for image_path in images:
@@ -93,7 +97,7 @@ def cmd_batch_run(args):
 def cmd_batch(args):
     from pipeline import select_template
 
-    images = args.images
+    images = _resolve_image_args(args.images)
     rows = []
 
     for image_path in images:
@@ -231,33 +235,89 @@ def _save_batch_csv(rows, save_path):
     print(f"[Batch] CSV saved: {path}")
 
 
+def _resolve_image_arg(image_arg: str) -> str:
+    path = Path(image_arg)
+    if path.is_file():
+        return str(path)
+    legacy_sample_path = _resolve_legacy_sample_image(path)
+    if legacy_sample_path is not None:
+        return str(legacy_sample_path)
+    if path.is_dir():
+        matches = sorted(path.glob("*_original.png"))
+        if len(matches) == 1:
+            return str(matches[0])
+        if not matches:
+            raise FileNotFoundError(
+                f"No *_original.png found in directory: {path}"
+            )
+        raise ValueError(
+            f"Multiple *_original.png files found in directory: {path}"
+        )
+    raise FileNotFoundError(f"Image path not found: {path}")
+
+
+def _resolve_legacy_sample_image(path: Path) -> Path | None:
+    if path.parent.name != "samples" or path.suffix.lower() != ".png":
+        return None
+
+    stem = path.stem
+    if "_" not in stem:
+        return None
+
+    prefix, _ = stem.split("_", 1)
+    sample_dir = path.parent / f"{prefix}_input"
+    candidate = sample_dir / path.name
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+def _resolve_image_args(image_args: list[str]) -> list[str]:
+    resolved: list[str] = []
+
+    for image_arg in image_args:
+        path = Path(image_arg)
+        if path.is_dir():
+            sample_dirs = sorted(
+                child for child in path.iterdir()
+                if child.is_dir() and child.name.endswith("_input")
+            )
+            if sample_dirs:
+                for sample_dir in sample_dirs:
+                    resolved.append(_resolve_image_arg(str(sample_dir)))
+                continue
+        resolved.append(_resolve_image_arg(image_arg))
+
+    return resolved
+
+
 def main():
     parser = argparse.ArgumentParser(description="Virtual Avatar Pipeline")
     parser.add_argument("--output", default="./output", help="output directory")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_run = sub.add_parser("run", help="run the full pipeline")
-    p_run.add_argument("--image", required=True)
+    p_run.add_argument("--image", required=True, help="image path or sample input directory")
     p_run.add_argument("--provider", default="varco", choices=["meshy", "varco"])
     p_run.add_argument("--api-key", default="", dest="api_key")
     p_run.add_argument("--skip-3d", action="store_true", dest="skip_3d")
     p_run.add_argument("--glb", default=None)
 
     p_ext = sub.add_parser("extract", help="extract face features only")
-    p_ext.add_argument("--image", required=True)
+    p_ext.add_argument("--image", required=True, help="image path or sample input directory")
 
     p_brun = sub.add_parser("batch-run", help="run the full pipeline for many images")
-    p_brun.add_argument("--images", nargs="+", required=True)
+    p_brun.add_argument("--images", nargs="+", required=True, help="image paths, sample input directories, or samples root")
     p_brun.add_argument("--provider", default="varco", choices=["meshy", "varco"])
     p_brun.add_argument("--api-key", default="", dest="api_key")
 
     p_bat = sub.add_parser("batch", help="extract and compare features for many images")
-    p_bat.add_argument("--images", nargs="+", required=True, help="image paths")
+    p_bat.add_argument("--images", nargs="+", required=True, help="image paths, sample input directories, or samples root")
     p_bat.add_argument("--save-json", dest="save_json", default=None)
     p_bat.add_argument("--save-csv", dest="save_csv", default=None)
 
     p_dbg = sub.add_parser("debug", help="visualize landmarks")
-    p_dbg.add_argument("--image", required=True)
+    p_dbg.add_argument("--image", required=True, help="image path or sample input directory")
 
     args = parser.parse_args()
 
