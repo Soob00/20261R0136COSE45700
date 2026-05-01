@@ -1,0 +1,27 @@
+# Python 캐시 파일
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# 가상 환경
+venv/
+env/
+.venv/
+
+# 패키지 관리
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 환경 설정
+.env
+.env.local
+
+*.png
+*.glb
+*.npy
+*.task
+*.json

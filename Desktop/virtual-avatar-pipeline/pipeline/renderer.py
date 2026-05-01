@@ -11,6 +11,7 @@ pyrender를 primary로 사용.
 
 import os
 import math
+import json
 import numpy as np
 from pathlib import Path
 from PIL import Image
@@ -26,6 +27,7 @@ VIEWS = {
 }
 
 RESOLUTION = (512, 512)
+BBOX_AREA_TARGET = 0.4
 
 
 def _make_camera_pose(yaw_deg: float, pitch_deg: float, distance: float = 1.5) -> np.ndarray:
@@ -105,6 +107,98 @@ def _center_scene_bounds(glb_path: str) -> tuple[float, float]:
     return distance, center_y
 
 
+def _compute_depth_mask(depth: np.ndarray) -> np.ndarray:
+    return np.isfinite(depth) & (depth > 0)
+
+
+def _save_depth_artifacts(depth: np.ndarray, mask: np.ndarray, output_dir: Path, view_name: str):
+    depth_f32 = depth.astype(np.float32, copy=False)
+    np.save(str(output_dir / f"{view_name}_depth.npy"), depth_f32)
+
+    mask_img = (mask.astype(np.uint8) * 255)
+    Image.fromarray(mask_img, mode="L").save(str(output_dir / f"{view_name}_mask.png"))
+
+    depth_vis = np.zeros(depth.shape, dtype=np.uint8)
+    if mask.any():
+        valid_depth = depth[mask]
+        depth_min = float(valid_depth.min())
+        depth_max = float(valid_depth.max())
+        if depth_max > depth_min:
+            normalized = (depth - depth_min) / (depth_max - depth_min)
+            depth_vis[mask] = np.clip(normalized[mask] * 255, 0, 255).astype(np.uint8)
+        else:
+            depth_vis[mask] = 255
+
+    Image.fromarray(depth_vis, mode="L").save(str(output_dir / f"{view_name}_depth.png"))
+
+
+def _compute_quality_metadata(depth: np.ndarray, mask: np.ndarray) -> dict:
+    height, width = depth.shape
+    total_pixels = width * height
+    valid_pixels = int(mask.sum())
+
+    if valid_pixels == 0:
+        return {
+            "valid_depth_ratio": 0.0,
+            "bbox": None,
+            "bbox_area_ratio": 0.0,
+            "center_offset": None,
+            "depth_min": None,
+            "depth_max": None,
+            "quality_score": 0.0,
+        }
+
+    ys, xs = np.where(mask)
+    x_min = int(xs.min())
+    x_max = int(xs.max())
+    y_min = int(ys.min())
+    y_max = int(ys.max())
+    bbox_width = x_max - x_min + 1
+    bbox_height = y_max - y_min + 1
+    bbox_area_ratio = float((bbox_width * bbox_height) / total_pixels)
+
+    bbox_center_x = (x_min + x_max) / 2.0
+    bbox_center_y = (y_min + y_max) / 2.0
+    image_center_x = (width - 1) / 2.0
+    image_center_y = (height - 1) / 2.0
+    max_center_distance = math.sqrt(image_center_x ** 2 + image_center_y ** 2)
+    center_distance = math.sqrt(
+        (bbox_center_x - image_center_x) ** 2 + (bbox_center_y - image_center_y) ** 2
+    )
+    center_offset = float(center_distance / max_center_distance) if max_center_distance > 0 else 0.0
+
+    valid_depth = depth[mask]
+    valid_depth_ratio = float(valid_pixels / total_pixels)
+    depth_min = float(valid_depth.min())
+    depth_max = float(valid_depth.max())
+
+    bbox_presence_score = min(bbox_area_ratio / BBOX_AREA_TARGET, 1.0)
+    center_score = 1.0 - center_offset if center_offset is not None else 0.0
+    quality_score = (
+        0.5 * valid_depth_ratio
+        + 0.3 * bbox_presence_score
+        + 0.2 * center_score
+    )
+    quality_score = float(np.clip(quality_score, 0.0, 1.0))
+
+    return {
+        "valid_depth_ratio": valid_depth_ratio,
+        "bbox": {
+            "x_min": x_min,
+            "y_min": y_min,
+            "x_max": x_max,
+            "y_max": y_max,
+            "width": bbox_width,
+            "height": bbox_height,
+        },
+        "bbox_area_ratio": bbox_area_ratio,
+        "center_offset": center_offset,
+        "depth_min": depth_min,
+        "depth_max": depth_max,
+        "quality_score": quality_score,
+    }
+
+
 def render_multiview(glb_path: str, output_dir: str = None, resolution: tuple = RESOLUTION) -> dict[str, Image.Image]:
     """
     GLB 파일을 VIEWS에 정의된 각도로 렌더링.
@@ -123,6 +217,10 @@ def render_multiview(glb_path: str, output_dir: str = None, resolution: tuple = 
     camera = pyrender.PerspectiveCamera(yfov=math.radians(40), aspectRatio=resolution[0] / resolution[1])
 
     results = {}
+    quality_metadata = {}
+    output_path = Path(output_dir) if output_dir else None
+    if output_path:
+        output_path.mkdir(parents=True, exist_ok=True)
 
     for view_name, angles in VIEWS.items():
         scene = _load_scene(glb_path)
@@ -133,14 +231,22 @@ def render_multiview(glb_path: str, output_dir: str = None, resolution: tuple = 
         cam_pose[1, 3] += center_y
         scene.add(camera, pose=cam_pose)
 
-        color, _ = renderer.render(scene)
+        color, depth = renderer.render(scene)
         img = Image.fromarray(color)
         results[view_name] = img
 
-        if output_dir:
-            Path(output_dir).mkdir(parents=True, exist_ok=True)
-            img.save(str(Path(output_dir) / f"{view_name}.png"))
+        if output_path:
+            mask = _compute_depth_mask(depth)
+            quality_metadata[view_name] = _compute_quality_metadata(depth, mask)
+
+            img.save(str(output_path / f"{view_name}.png"))
+            _save_depth_artifacts(depth, mask, output_path, view_name)
             print(f"[Renderer] saved {view_name}.png")
+
+    if output_path:
+        quality_path = output_path / "render_quality.json"
+        quality_path.write_text(json.dumps(quality_metadata, indent=2), encoding="utf-8")
+        print(f"[Renderer] saved render_quality.json")
 
     renderer.delete()
     return results
