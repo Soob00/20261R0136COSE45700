@@ -15,6 +15,7 @@ from .feature_extractor import extract_features
 from .renderer import render_multiview
 from .template_selector import select_template
 from .varco_client import get_client
+from .parameter_mapper import map_avatar_parameters
 
 
 def run_pipeline(
@@ -35,6 +36,8 @@ def run_pipeline(
           "feature_vector": {...},
           "feature_source": "original" | "front_render",
           "feature_debug": {...},
+          "avatar_parameters": {...},
+          "parameter_debug": {...},
           "template": str,
           "confidence": float,
           "all_scores": {...},
@@ -51,6 +54,10 @@ def run_pipeline(
     fv, feature_source, feature_debug = _stage4_extract(image_path, renders)
 
     result = select_template(fv)
+    avatar_parameters, parameter_debug = map_avatar_parameters(
+        fv,
+        template_name=result.template_name,
+    )
     print(
         f"[Stage 5] template={result.template_name} "
         f"confidence={result.confidence:.3f} "
@@ -64,6 +71,8 @@ def run_pipeline(
         "feature_vector": fv.to_dict(),
         "feature_source": feature_source,
         "feature_debug": feature_debug,
+        "avatar_parameters": avatar_parameters,
+        "parameter_debug": parameter_debug,
         "template": result.template_name,
         "confidence": result.confidence,
         "all_scores": result.all_scores,
