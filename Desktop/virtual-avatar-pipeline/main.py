@@ -24,6 +24,9 @@ from pipeline import (
 )
 
 
+ALLOWED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+
+
 def cmd_run(args):
     image_path = _resolve_image_arg(args.image)
     result = run_pipeline(
@@ -238,26 +241,27 @@ def _save_batch_csv(rows, save_path):
 def _resolve_image_arg(image_arg: str) -> str:
     path = Path(image_arg)
     if path.is_file():
+        _validate_image_suffix(path)
         return str(path)
     legacy_sample_path = _resolve_legacy_sample_image(path)
     if legacy_sample_path is not None:
         return str(legacy_sample_path)
     if path.is_dir():
-        matches = sorted(path.glob("*_original.png"))
+        matches = _find_original_images(path)
         if len(matches) == 1:
             return str(matches[0])
         if not matches:
             raise FileNotFoundError(
-                f"No *_original.png found in directory: {path}"
+                f"No supported *_original image found in directory: {path}"
             )
         raise ValueError(
-            f"Multiple *_original.png files found in directory: {path}"
+            f"Multiple supported *_original images found in directory: {path}"
         )
     raise FileNotFoundError(f"Image path not found: {path}")
 
 
 def _resolve_legacy_sample_image(path: Path) -> Path | None:
-    if path.parent.name != "samples" or path.suffix.lower() != ".png":
+    if path.parent.name != "samples" or path.suffix.lower() not in ALLOWED_IMAGE_SUFFIXES:
         return None
 
     stem = path.stem
@@ -268,8 +272,24 @@ def _resolve_legacy_sample_image(path: Path) -> Path | None:
     sample_dir = path.parent / f"{prefix}_input"
     candidate = sample_dir / path.name
     if candidate.is_file():
+        _validate_image_suffix(candidate)
         return candidate
     return None
+
+
+def _find_original_images(path: Path) -> list[Path]:
+    return sorted(
+        child for child in path.iterdir()
+        if child.is_file()
+        and child.suffix.lower() in ALLOWED_IMAGE_SUFFIXES
+        and child.stem.endswith("_original")
+    )
+
+
+def _validate_image_suffix(path: Path) -> None:
+    if path.suffix.lower() not in ALLOWED_IMAGE_SUFFIXES:
+        allowed = ", ".join(sorted(ALLOWED_IMAGE_SUFFIXES))
+        raise ValueError(f"Unsupported image extension: {path.suffix}. Allowed: {allowed}")
 
 
 def _resolve_image_args(image_args: list[str]) -> list[str]:

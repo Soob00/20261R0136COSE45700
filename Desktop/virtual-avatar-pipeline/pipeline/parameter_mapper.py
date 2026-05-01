@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 FEATURE_CALIBRATION: dict[str, dict[str, float]] = {
     "eye_aspect_ratio": {"ref": 0.34, "half_range": 0.15},
     "eye_distance_ratio": {"ref": 0.45, "half_range": 0.12},
-    "face_width_height_ratio": {"ref": 0.80, "half_range": 0.20},
+    "face_width_height_ratio": {"ref": 0.98, "half_range": 0.16},
     "nose_height_ratio": {"ref": 0.28, "half_range": 0.15},
     "nose_width_ratio": {"ref": 0.26, "half_range": 0.12},
-    "mouth_width_ratio": {"ref": 0.40, "half_range": 0.12},
+    "mouth_width_ratio": {"ref": 0.35, "half_range": 0.20},
     "jaw_width_ratio": {"ref": 0.70, "half_range": 0.15},
     "forehead_ratio": {"ref": 0.50, "half_range": 0.15},
     "chin_ratio": {"ref": 0.32, "half_range": 0.12},

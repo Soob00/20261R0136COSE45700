@@ -21,7 +21,11 @@ build/
 .env.local
 
 *.png
+*.jpg
+*.jpeg
+*.webp
 *.glb
 *.npy
 *.task
 *.json
+*.csv

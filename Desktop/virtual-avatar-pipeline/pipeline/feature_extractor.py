@@ -117,10 +117,10 @@ def _ensure_model():
 
 def _to_rgb(image) -> np.ndarray:
     if isinstance(image, str):
-        img = cv2.imread(image)
-        if img is None:
-            raise FileNotFoundError(f"이미지를 읽을 수 없습니다: {image}")
-        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        try:
+            return np.array(Image.open(image).convert("RGB"))
+        except Exception as exc:
+            raise FileNotFoundError(f"Unable to read image: {image}") from exc
     if isinstance(image, Image.Image):
         return np.array(image.convert("RGB"))
     # BGR ndarray

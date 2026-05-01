@@ -80,7 +80,7 @@ def _make_camera_pose(
 def _load_scene(glb_path: str) -> pyrender.Scene:
     mesh_or_scene = trimesh.load(glb_path, force="scene")
 
-    scene = pyrender.Scene(bg_color=[1.0, 1.0, 1.0, 1.0], ambient_light=[0.4, 0.4, 0.4])
+    scene = pyrender.Scene(bg_color=[1.0, 1.0, 1.0, 1.0], ambient_light=[0.5, 0.5, 0.5])
 
     if isinstance(mesh_or_scene, trimesh.Scene):
         for mesh in _iter_scene_meshes_with_transforms(mesh_or_scene):
@@ -113,14 +113,12 @@ def _iter_scene_meshes_with_transforms(trimesh_scene: trimesh.Scene):
         yield mesh
 
 
-def _add_lighting(scene: pyrender.Scene):
-    # 정면 주광
-    light = pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=3.0)
-    scene.add(light, pose=_make_camera_pose(0, 20, 2.0))
+def _add_lighting(scene: pyrender.Scene, view_yaw: float, target: np.ndarray):
+    light = pyrender.DirectionalLight(color=[1.0, 1.0, 1.0], intensity=2.5)
+    scene.add(light, pose=_make_camera_pose(view_yaw, 18, 2.0, target=target))
 
-    # 보조광 (좌측)
-    fill = pyrender.DirectionalLight(color=[0.8, 0.8, 1.0], intensity=1.5)
-    scene.add(fill, pose=_make_camera_pose(60, 10, 2.0))
+    fill = pyrender.DirectionalLight(color=[0.9, 0.9, 1.0], intensity=1.0)
+    scene.add(fill, pose=_make_camera_pose(view_yaw + 35, 10, 2.0, target=target))
 
 
 def _center_scene_bounds(glb_path: str) -> tuple[float, np.ndarray]:
@@ -257,7 +255,7 @@ def render_multiview(glb_path: str, output_dir: str = None, resolution: tuple = 
 
     for view_name, angles in VIEWS.items():
         scene = _load_scene(glb_path)
-        _add_lighting(scene)
+        _add_lighting(scene, angles["yaw"], center_xyz)
 
         cam_pose = _make_camera_pose(
             angles["yaw"],

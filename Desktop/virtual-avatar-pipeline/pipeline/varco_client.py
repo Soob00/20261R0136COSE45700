@@ -131,8 +131,14 @@ class MeshyClient:
         import base64
         with open(image_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode()
-        ext = Path(image_path).suffix.lstrip(".")
-        return f"data:image/{ext};base64,{encoded}"
+        ext = Path(image_path).suffix.lower().lstrip(".")
+        mime_type = {
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "webp": "image/webp",
+        }.get(ext, f"image/{ext}")
+        return f"data:{mime_type};base64,{encoded}"
 
     def _create_task(self, image_url: str) -> str:
         resp = self.session.post(
