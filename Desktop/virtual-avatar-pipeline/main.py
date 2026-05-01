@@ -37,8 +37,14 @@ def cmd_run(args):
         skip_3d=args.skip_3d,
         existing_glb=args.glb,
     )
-    print("\n[Done] Pipeline result:")
+    status = result.get("status", "ok")
+    if status == "ok":
+        print("\n[Done] Pipeline result:")
+    else:
+        print(f"\n[Failed] Pipeline result: status={status}")
     print(json.dumps(result, indent=2, ensure_ascii=False))
+    if status != "ok":
+        sys.exit(1)
 
 
 def cmd_extract(args):
@@ -87,8 +93,17 @@ def cmd_batch_run(args):
                 provider=args.provider,
                 api_key=args.api_key,
             )
-            results.append({"image": image_path, "status": "ok", **result})
-            print(f"[BatchRun] {image_path} -> template={result['template']}")
+            status = result.get("status", "ok")
+            batch_row = {"image": image_path, **result}
+            results.append(batch_row)
+
+            if status == "ok":
+                print(f"[BatchRun] {image_path} -> template={result['template']}")
+            else:
+                print(
+                    f"[BatchRun] {image_path} -> {status}: "
+                    f"{result.get('error', '')}"
+                )
         except Exception as exc:
             results.append({"image": image_path, "status": "failed", "error": str(exc)})
             print(f"[BatchRun] {image_path} -> {exc}")

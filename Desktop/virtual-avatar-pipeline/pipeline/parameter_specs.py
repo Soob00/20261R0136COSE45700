@@ -1,9 +1,9 @@
 """
 Avatar parameter specifications keyed by template Key_ID.
 
-This module is definition-only for Step 1. It is intentionally not imported
-by the current pipeline flow, so run_pipeline(), slider_init, and
-pipeline_result.json behavior remain unchanged.
+This module defines Key_ID spec metadata consumed by parameter mapping.
+At runtime it is imported through parameter_mapper and contributes to
+avatar_parameters / parameter_debug written in pipeline_result.json.
 """
 
 from collections.abc import Iterator

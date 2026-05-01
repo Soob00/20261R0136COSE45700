@@ -41,21 +41,24 @@ class VarcoClient:
         poll_interval: int = 10,
         timeout: int = 300,
     ) -> str:
-        image_path = self._ensure_png(image_path)
+        image_path = self._ensure_png(
+            image_path,
+            Path(output_path).parent / "_inputs",
+        )
         request_id = self._submit(image_path)
         glb_url = self._poll_until_done(request_id, poll_interval, timeout)
         return self._download_glb(glb_url, output_path)
 
-    def _ensure_png(self, image_path: str) -> str:
-        """VARCO는 PNG만 지원 — 다른 포맷이면 PNG로 변환."""
+    def _ensure_png(self, image_path: str, output_dir: Path) -> str:
+        """Normalize VARCO input to an RGBA PNG inside the run output directory."""
         from PIL import Image as PILImage
+
         p = Path(image_path)
-        if p.suffix.lower() == ".png":
-            return image_path
-        png_path = str(p.with_suffix(".png"))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        png_path = output_dir / f"{p.stem}_normalized.png"
         PILImage.open(image_path).convert("RGBA").save(png_path)
-        print(f"[VARCO] {p.suffix} → PNG 변환: {png_path}")
-        return png_path
+        print(f"[VARCO] normalized input saved: {png_path}")
+        return str(png_path)
 
     def _submit(self, image_path: str) -> str:
         with open(image_path, "rb") as f:

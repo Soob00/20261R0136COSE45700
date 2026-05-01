@@ -1,8 +1,8 @@
 """
 Map extracted face features to avatar Key_ID parameters.
 
-This module is intentionally not connected to the pipeline yet. It provides a
-standalone mapper for the Step 2 Key_ID parameter flow.
+This module is connected to the pipeline Stage 6 and maps extracted features
+to avatar parameter outputs plus debug metadata.
 """
 
 from typing import TYPE_CHECKING, Any

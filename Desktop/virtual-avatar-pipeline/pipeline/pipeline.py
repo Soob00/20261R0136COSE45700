@@ -36,19 +36,38 @@ def run_pipeline(
     Run the full pipeline from image input to template selection.
 
     Returns:
-        {
-          "glb_path": str,
-          "renders": {view_name: image_path},
-          "feature_vector": {...},
-          "feature_source": "original" | "front_render",
-          "feature_debug": {...},
-          "avatar_parameters": {...},
-          "parameter_debug": {...},
-          "template": str,
-          "confidence": float,
-          "all_scores": {...},
-          "slider_init": {...},
-        }
+        Success ("status" == "ok"):
+          {
+            "status": "ok",
+            "glb_path": str,
+            "renders": {view_name: image_path},
+            "feature_vector": {...},
+            "feature_source": "original" | "front_render",
+            "feature_debug": {...},
+            "avatar_parameters": {...},
+            "parameter_debug": {...},
+            "template": str,
+            "confidence": float,
+            "all_scores": {...},
+            "slider_init": {...},
+          }
+
+        Stage 4 failure ("status" == "failed_stage4"):
+          {
+            "status": "failed_stage4",
+            "error": str,
+            "glb_path": str,
+            "renders": {view_name: image_path},
+            "feature_vector": None,
+            "feature_source": None,
+            "feature_debug": {...},
+            "avatar_parameters": None,
+            "parameter_debug": None,
+            "template": None,
+            "confidence": None,
+            "all_scores": None,
+            "slider_init": None,
+          }
     """
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)

@@ -119,8 +119,10 @@ def _to_rgb(image) -> np.ndarray:
     if isinstance(image, str):
         try:
             return np.array(Image.open(image).convert("RGB"))
-        except Exception as exc:
-            raise FileNotFoundError(f"Unable to read image: {image}") from exc
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(f"Image path not found: {image}") from exc
+        except OSError as exc:
+            raise OSError(f"Unable to read image: {image}") from exc
     if isinstance(image, Image.Image):
         return np.array(image.convert("RGB"))
     # BGR ndarray

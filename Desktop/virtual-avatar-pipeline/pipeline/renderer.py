@@ -1,12 +1,11 @@
 """
-GLB → 멀티뷰 2D 이미지 렌더러
+GLB를 pyrender로 멀티뷰 2D 이미지로 렌더링한다.
 
-pyrender를 primary로 사용.
-- Windows (개발): pyglet 백엔드 (display 필요)
-- Linux 서버 (운영): EGL 백엔드
-  → PYOPENGL_PLATFORM=egl python main.py
+- Windows(개발): pyglet 백엔드(display 필요)
+- Linux(서버): EGL 백엔드
+  예) PYOPENGL_PLATFORM=egl python main.py
 
-4개 뷰 렌더링: front, left, right, quarter(45°)
+출력 뷰: front, left, right, quarter(45°)
 """
 
 import os
@@ -122,7 +121,7 @@ def _add_lighting(scene: pyrender.Scene, view_yaw: float, target: np.ndarray):
 
 
 def _center_scene_bounds(glb_path: str) -> tuple[float, np.ndarray]:
-    """GLB 로드 → 바운딩 박스 기준 distance와 center 계산."""
+    """GLB bounds에서 카메라 거리와 center_xyz 타겟을 계산한다."""
     mesh_or_scene = trimesh.load(glb_path, force="scene")
     if isinstance(mesh_or_scene, trimesh.Scene):
         bounds = mesh_or_scene.bounds
