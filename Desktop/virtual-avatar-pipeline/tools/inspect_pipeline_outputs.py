@@ -132,7 +132,10 @@ def _inspect_sample_dir(sample_dir: Path) -> dict[str, str]:
         return row
 
     if pipeline_result is not None:
-        row["status"] = "ok"
+        status_value = pipeline_result.get("status")
+        error_value = pipeline_result.get("error")
+        row["status"] = _to_cell(status_value) if status_value is not None else "ok"
+        row["error"] = _to_cell(error_value) if error_value is not None else ""
         _fill_pipeline_fields(row, pipeline_result)
     elif not row["status"]:
         row["status"] = "missing_pipeline_result"

@@ -18,6 +18,12 @@ from .varco_client import get_client
 from .parameter_mapper import map_avatar_parameters
 
 
+class Stage4ExtractionError(RuntimeError):
+    def __init__(self, message: str, feature_debug: dict):
+        super().__init__(message)
+        self.feature_debug = feature_debug
+
+
 def run_pipeline(
     image_path: str,
     output_dir: str,
@@ -51,7 +57,28 @@ def run_pipeline(
         image_path, out, provider, api_key, skip_3d, existing_glb
     )
     renders, render_paths = _stage3_render(glb_path, out)
-    fv, feature_source, feature_debug = _stage4_extract(image_path, renders)
+    try:
+        fv, feature_source, feature_debug = _stage4_extract(image_path, renders)
+    except Stage4ExtractionError as exc:
+        output = {
+            "status": "failed_stage4",
+            "error": str(exc),
+            "glb_path": glb_path,
+            "renders": render_paths,
+            "feature_vector": None,
+            "feature_source": None,
+            "feature_debug": exc.feature_debug,
+            "avatar_parameters": None,
+            "parameter_debug": None,
+            "template": None,
+            "confidence": None,
+            "all_scores": None,
+            "slider_init": None,
+        }
+        result_path = out / "pipeline_result.json"
+        result_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
+        print(f"[Pipeline] result saved: {result_path}")
+        return output
 
     result = select_template(fv)
     avatar_parameters, parameter_debug = map_avatar_parameters(
@@ -66,6 +93,7 @@ def run_pipeline(
     print(f"[Stage 6] slider init={result.slider_init}")
 
     output = {
+        "status": "ok",
         "glb_path": glb_path,
         "renders": render_paths,
         "feature_vector": fv.to_dict(),
@@ -212,7 +240,8 @@ def _stage4_extract(image_path: str, renders: dict) -> tuple:
     failure_text = ", ".join(
         f"{item['source']}: {item['error']}" for item in feature_debug["failures"]
     ) or "no failure details"
-    raise RuntimeError(
+    raise Stage4ExtractionError(
         "Stage 4 feature extraction failed for both original and front_render. "
-        f"Details: {failure_text}"
+        f"Details: {failure_text}",
+        feature_debug,
     )
