@@ -42,9 +42,9 @@ SIGNED_CALIBRATION = {
     "Eye_TailHeight":  (-0.0185, 0.0401),
     "Eye_PupilWidth":  (0.0860, 0.2436),   # proxy = Eye_WidthV
     "Eye_PupilWidthV": (0.0860, 0.2436),   # proxy = Eye_WidthV
-    "Brow_Dist":       (0.2309, 0.4115),
+    "Brow_Dist":       (0.2325, 0.4300),  # 역계산: 007, 009, 010 (3개 이미지)
     "Brow_Height":     (0.7209, 1.0771),
-    "Brow_Width":      (0.0800, 0.4000),
+    "Brow_Width":      (0.0000, 0.5142),  # 역계산: 007, 009, 010 (3개 이미지)
     "Brow_Rot":        (-0.3266, 0.2589),
     "Nose_Height":     (-0.0172, 0.1440),  # depth-based (renders only)
     "Nose_UnderNose":  (0.0979, 0.2109),
@@ -273,7 +273,7 @@ def compute_avatar_keys(
     R_brow_slope = (float(R_brow_outer[1]) - float(R_brow_inner[1])) / max(R_brow_w, _EPS)
     L_brow_slope = (float(L_brow_outer[1]) - float(L_brow_inner[1])) / max(L_brow_w, _EPS)
     _rv = (R_brow_slope + L_brow_slope) / 2.0
-    Brow_Rot = float(max(-1.0, min(1.0, _rv / 0.50)))
+    Brow_Rot = float(max(-1.0, min(1.0, _rv / 0.6151)))  # 역계산: 007, 009, 010
     if _raw_out is not None: _raw_out["Brow_Rot"] = _rv
 
     _rv = (R_brow_w + L_brow_w) / 2.0 / face_scale
