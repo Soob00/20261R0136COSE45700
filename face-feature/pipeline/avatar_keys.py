@@ -54,10 +54,10 @@ SIGNED_CALIBRATION = {
 }
 
 MAP01_CALIBRATION = {
-    "Face_Cheek":       (1.450, 1.800),
-    "Face_ChinWidth":   (0.6200, 0.7800),
-    "Face_JawLine":     (0.2432, 0.6000),
-    "Face_Roundness":   (0.0042, 0.0397),
+    "Face_Cheek":       (0.0000, 2.0000),  # 역계산: 사용자 target 데이터 기반
+    "Face_ChinWidth":   (0.71676, 1.65560),  # 최종: img 002~019 (12개) 포함
+    "Face_JawLine":     (0.00000, 0.73286),  # 최종: img 002~019 (12개) 포함
+    "Face_Roundness":   (0.01150, 0.12686),  # 최종: img 002~019 (12개) 포함
     "Eye_FrontFlat":    (0.0982, 0.6729),  # inner gap / eye_width ratio
     "Eye_TopLidFlat":   (-0.0300, 0.4417),
     "Eye_LowerLidFlat": (-0.0600, 0.8230),
@@ -68,12 +68,11 @@ MAP01_CALIBRATION = {
 _SC = SIGNED_CALIBRATION
 _MC = MAP01_CALIBRATION
 
-_FACE_JAWLINE_GAMMA = 0.90
-_FACE_ROUNDNESS_GAMMA = 1.85
-_FACE_CHINWIDTH_GAMMA = 1.60
-_FACE_CHEEK_GAMMA = 0.95
-# emphasize chin width for illustrative (2D) faces so rounding/wider chins are stronger
-_FACE_JAWLINE_WEIGHTS = {"chin_angle": 0.06, "chin_width": 0.60, "chin_depth": 0.34}
+_FACE_JAWLINE_GAMMA = 1
+_FACE_ROUNDNESS_GAMMA = 0.3
+_FACE_CHINWIDTH_GAMMA = 0.13
+_FACE_CHEEK_GAMMA = 0.38
+_FACE_JAWLINE_WEIGHTS = {"chin_angle": 0.20, "chin_width": 0.35, "chin_depth": 0.45}
 _FACE_ROUNDNESS_WEIGHTS = {"width_height": 0.25, "chin_angle": 0.05, "chin_depth": 0.15}
 _EYE_TAIL_RAW_OFFSET = 0.006
 _EYE_WIDTHV_POS_SCALE = 0.65
@@ -423,7 +422,7 @@ def compute_avatar_keys(
 
     # determine whether to apply style corrections; default from config if None
     if apply_style_corrections is None:
-        apply_style_corrections = bool(cfg.DEFAULTS.get("apply_style_corrections", True))
+        apply_style_corrections = bool(cfg.DEFAULTS.get("apply_style_corrections", False))
 
     if is_2d_style and apply_style_corrections:
         orig_jaw = float(Face_JawLine)
