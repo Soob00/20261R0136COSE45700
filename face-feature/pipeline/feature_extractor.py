@@ -140,6 +140,9 @@ def extract_features_full(
     raw_out: dict = {}
     avatar_keys = compute_avatar_keys(kps_raw, _raw_out=raw_out, depth=depth, img_shape=img_bgr.shape[:2])
 
+    if kps_raw is not None:
+        raw_out["_adf_landmarks"] = [[float(p[0]), float(p[1])] for p in kps_raw]
+
     face_cheek_2d_raw = raw_out.get("Face_Cheek")
 
     if _side_cheek_raw is not None:
