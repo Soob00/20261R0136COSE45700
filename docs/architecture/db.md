@@ -2,12 +2,13 @@
 
 ## Current Persistence
 
-현재 제품의 기본 영속성은 두 층이다.
+현재 제품의 기본 영속성은 세 층이다.
 
 - 브라우저 localStorage: 개발용 avatar/version 저장
 - 파일/임시 디렉터리: API route에서 Python pipeline input/output 처리
+- RDS PostgreSQL: 운영용 avatar/version/pipeline metadata 저장
 
-운영용 DB는 아직 구현되어 있지 않다.
+Next.js API Routes가 `DATABASE_URL`로 RDS에 직접 연결한다.
 
 ## Current Client Contract
 
@@ -26,9 +27,9 @@
 - Pipeline
   - `PipelineResult`
 
-## Proposed PostgreSQL Schema
+## PostgreSQL Schema
 
-운영 저장소가 필요해지면 PostgreSQL을 기준으로 시작한다.
+초기 운영 스키마는 다음 범위에서 시작한다.
 
 ```text
 users
@@ -65,9 +66,23 @@ pipeline_runs
   created_at timestamptz
 ```
 
+## Required Tables by Phase
+
+- Phase 1: `avatars`, `avatar_versions`
+- Phase 2: `pipeline_runs`
+- Phase 3: `users`, auth-linked ownership
+
+## Connection Policy
+
+- EC2와 RDS는 같은 VPC에 둔다.
+- RDS는 public access를 끈다.
+- RDS security group inbound는 EC2 security group에서 오는 PostgreSQL port만 허용한다.
+- application user는 migration owner와 runtime user를 분리한다.
+- `DATABASE_URL`은 EC2 환경변수 또는 secret manager에 둔다.
+
 ## Storage Notes
 
 - texture data URL과 thumbnail은 DB에 직접 넣기 전에 크기 제한을 둔다.
 - GLB/VRM/PNG 산출물은 DB가 아니라 object storage 또는 파일 저장소로 분리한다.
 - `parameters_json`은 morph/material/hair 구조가 바뀔 수 있으므로 JSONB로 시작한다.
-
+- RDS automated backups를 켜고, MVP라도 최소 7일 retention을 둔다.
