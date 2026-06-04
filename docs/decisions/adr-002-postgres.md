@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -10,7 +10,7 @@ Proposed
 
 ## Decision
 
-운영 저장소가 필요해지면 PostgreSQL을 기본 DB로 사용한다. morph/material/hair parameters는 JSONB로 저장하고, 대용량 파일은 object storage 또는 파일 저장소로 분리한다.
+운영 저장소는 AWS RDS PostgreSQL을 기본 DB로 사용한다. morph/material/hair parameters는 JSONB로 저장하고, 대용량 파일은 object storage 또는 파일 저장소로 분리한다.
 
 ## Consequences
 

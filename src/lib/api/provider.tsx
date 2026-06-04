@@ -5,10 +5,12 @@ import type { APIClient } from './types';
 import { localAPIClient } from './local';
 import { remoteAPIClient } from './remote';
 
-const apiMode = process.env.NEXT_PUBLIC_API_MODE ?? 'remote';
-const defaultClient: APIClient =
-  apiMode === 'local' ? localAPIClient : remoteAPIClient;
+function resolveDefaultClient(): APIClient {
+  const mode = process.env.NEXT_PUBLIC_API_MODE?.toLowerCase() ?? 'remote';
+  return mode === 'local' ? localAPIClient : remoteAPIClient;
+}
 
+const defaultClient = resolveDefaultClient();
 const APIContext = createContext<APIClient>(defaultClient);
 
 interface APIProviderProps {

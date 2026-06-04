@@ -11,8 +11,9 @@
 
 - 프론트엔드는 `src/lib/api/types.ts`의 `APIClient` 인터페이스만 바라본다.
 - `localAPIClient`는 개발 fallback이다.
-- `remoteAPIClient`는 기본 client이며 `NEXT_PUBLIC_API_MODE=local`일 때만 local로 전환한다.
-- 외부 backend URL은 `NEXT_PUBLIC_API_URL`을 사용한다.
+- 운영에서는 별도 Java backend가 없으므로 same-origin Next.js API Routes를 기본 backend로 본다.
+- `remoteAPIClient`는 외부 API 서버가 아니라 같은 배포 단위의 API route 또는 future API gateway로 향하게 한다.
+- 외부 backend URL 환경변수는 사용 목적을 명확히 재정의하기 전까지 운영 필수값으로 두지 않는다.
 
 ## Pipeline Contract
 
@@ -25,4 +26,5 @@
 - API key는 클라이언트 번들에 노출하지 않는다.
 - `apiKey` form field는 개발 편의용으로만 보고, 운영에서는 서버 환경변수를 우선한다.
 - uploaded file은 temp directory에서 처리하고 요청 종료 후 삭제한다.
+- DB 접속 정보는 `NEXT_PUBLIC_*` 환경변수에 넣지 않는다.
 

@@ -9,6 +9,15 @@ npm run lint
 npm run build
 ```
 
+DB/API 변경 후 추가 확인:
+
+```bash
+npm run lint
+npm run build
+```
+
+그리고 RDS 또는 로컬 PostgreSQL에 대해 migration, avatar save/load, version save/list/delete를 확인한다.
+
 파이프라인 변경 후 추가 확인:
 
 ```bash
@@ -51,4 +60,6 @@ npm run dev
 - localStorage version migration
 - SSR 중 `window`, `localStorage`, `File` 접근
 - API route temp/debug 파일 처리
+- RDS 연결 문자열이 client bundle에 노출되는 문제
+- EC2에서 Python interpreter, native dependency, ADF server 경로가 달라지는 문제
 
