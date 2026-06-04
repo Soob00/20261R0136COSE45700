@@ -286,6 +286,61 @@ def adjust_eyebrow(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
     return result
 
 
+def add_face_eyeshadow(
+    texture_bgra: np.ndarray,
+    eyeline_features: dict,
+) -> np.ndarray:
+    """아이섀도우를 Face 텍스처의 눈 주변 UV 영역에 타원형 오버레이로 렌더링."""
+    result = texture_bgra.copy()
+    h, w = result.shape[:2]
+    alpha = result[:, :, 3]
+
+    color_rgb = eyeline_features.get("eyeshadow_color", [180, 160, 180])
+    opacity   = eyeline_features.get("eyeshadow_opacity", 0.5)
+    position  = eyeline_features.get("eyeshadow_position", "lid_only")
+
+    shadow_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])
+
+    # position별 눈 위 Y 오프셋 (UV 공간, 눈 위쪽 = 작은 Y)
+    EYE_Y_UV = 0.541  # 눈 UV Y 좌표
+    if position == "lid_only":
+        y_off, ry_uv = 0.025, 0.018   # 눈꺼풀 좁게
+    elif position == "lid_and_crease":
+        y_off, ry_uv = 0.040, 0.030   # 쌍커풀까지 넓게
+    elif position == "under_eye":
+        y_off, ry_uv = -0.018, 0.018  # 눈 아래쪽
+    else:  # full
+        y_off, ry_uv = 0.040, 0.040
+
+    # 좌/우 눈 UV X 좌표
+    for eye_x_uv in [0.341, 0.657]:
+        cx = int(eye_x_uv * w)
+        cy = int((EYE_Y_UV - y_off) * h)
+        rx = int(0.075 * w)
+        ry = max(int(ry_uv * h), 2)
+
+        mask = np.zeros((h, w), dtype=np.float32)
+        cv2.ellipse(mask, (cx, cy), (rx, ry), 0, 0, 360, 1.0, -1)
+
+        blur_k = max(int(ry * 2.5) | 1, 5)
+        mask = cv2.GaussianBlur(mask, (blur_k, blur_k), 0)
+        mask = np.clip(mask * opacity, 0, 1) * (alpha > 0).astype(np.float32)
+
+        m3 = mask[:, :, np.newaxis]
+        layer = np.full((h, w, 3), shadow_bgr, dtype=np.float32)
+        result[:, :, :3] = np.where(
+            m3 > 0,
+            np.clip(
+                result[:, :, :3].astype(np.float32) * (1 - m3 * 0.65) +
+                layer * m3 * 0.65,
+                0, 255
+            ).astype(np.uint8),
+            result[:, :, :3]
+        )
+
+    return result
+
+
 def adjust_eyeline(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
     eyeline = features["eyeline"]
     result = texture_bgra.copy()
@@ -566,7 +621,6 @@ def process(input_dir: str, output_dir: str, features: dict):
     generate_targets = [
         ("BaseTexture_Generate_Face.png",      adjust_face,      "Face 피부톤 + 볼터치 + 점"),
         ("BaseTexture_Generate_Eyebrow.png",   adjust_eyebrow,   "Eyebrow 눈썹"),
-        ("BaseTexture_Generate_Eyeline.png",   adjust_eyeline,   "Eyeline 쌍커풀 + 아이라인"),
         ("BaseTexture_Generate_Pupil.png",     adjust_pupil,     "Pupil 눈동자"),
         ("BaseTexture_Static_EyeHighlight.png", adjust_highlight, "EyeHighlight 안광"),
     ]
@@ -575,6 +629,15 @@ def process(input_dir: str, output_dir: str, features: dict):
         "BaseTexture_Static_EyeWhite.png",
         "BaseTexture_Static_MouthInside.png",
     ]
+
+    # Eyeline: eyeline_type 기반으로 assets/eyeline/ 에서 베이스 선택 후 복사
+    # assets/eyeline/ 경로: input_dir(assets/textures)의 상위 폴더 기준
+    eyeline_dir  = Path(input_dir) / "eyeline"
+    eyeline_type = features.get("eyeline", {}).get("eyeline_type", "default")
+    eyeline_src  = eyeline_dir / f"eyeline_{eyeline_type}.png"
+    if not eyeline_src.exists():
+        eyeline_src = eyeline_dir / "eyeline_default.png"   # 폴백
+    eyeline_dst = Path(output_dir) / "BaseTexture_Generate_Eyeline.png"
 
     print("=== Generate 텍스처 보정 ===\n")
     for tex_name, adjust_fn, label in generate_targets:
@@ -608,7 +671,15 @@ def process(input_dir: str, output_dir: str, features: dict):
         else:
             print(f"  건너뜀: {name} 없음")
 
-    print(f"\n완료. 결과 폴더: {output_dir}")
+    print("\n=== Eyeline 베이스 선택 ===\n")
+    if eyeline_src.exists():
+        shutil.copy2(str(eyeline_src), str(eyeline_dst))
+        print(f"  선택: {eyeline_src.name}  (type={eyeline_type})")
+        print(f"  복사: {eyeline_dst}\n")
+    else:
+        print(f"  건너뜀: eyeline 베이스 없음 ({eyeline_src})\n")
+
+    print(f"완료. 결과 폴더: {output_dir}")
 
 
 if __name__ == "__main__":

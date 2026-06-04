@@ -386,6 +386,7 @@ Reply ONLY in JSON format. No explanation, no markdown, no extra text.
     "has_gradient": true/false
   },
   "eyeline": {
+    "eyeline_type": "one of: simple/simplelash/cute/cutelash/maturelash",
     "eyeliner_color": [R, G, B],
     "eyeliner_thickness": "thin/medium/thick",
     "has_eyelid_crease": true/false,
@@ -462,6 +463,23 @@ Rules:
 - highlights: always return empty array []
 - eyeshadow_color: dominant shadow color if present, [0,0,0] if not
 - position must be chosen from the exact list provided
+- eyeline_type: choose ONE from the list below
+  Step 1 — lash 유무: 속눈썹 획이 실제로 그려져 있는가?
+    * lash NONE : 아이라인만 있고 개별 속눈썹 선(획)이 없음 → suffix 없음
+    * lash PRESENT: 눈 가장자리에 뾰족한 속눈썹 선이 하나 이상 그려져 있음 → "lash" suffix
+    (overall_style·face maturity는 기준이 아님 — 속눈썹 선의 존재 자체만 봄)
+
+  Step 2 — 속눈썹 복잡도 (lash PRESENT인 경우에만):
+    * "simple"   계열 : 속눈썹 획이 2~4개 이하, 간결하고 짧음
+    * "cute"     계열 : 속눈썹 획 5~8개, 중간 밀도, 보통 길이
+    * "mature"   계열 : 속눈썹 획 9개 이상 또는 겹겹이 쌓인 두꺼운 속눈썹
+
+  Step 3 — lash NONE인 경우 eyeliner 스타일:
+    * "simple" : 얇은 한 줄 라인
+    * "cute"   : 약간 굵거나 끝이 올라간 라인
+
+  Final types: "simple" / "simplelash" / "cute" / "cutelash" / "maturelash"
+  (mature는 항상 lash가 있음)
 """
 
     import time
@@ -508,7 +526,62 @@ Rules:
         else:
             print("  안광 감지: 없음 (기본 하이라이트 텍스처 유지)")
 
+
     return features
+
+
+def _sample_eyeshadow_color(image_path: str, landmarks_path: str) -> list:
+    """눈꺼풀(눈 위쪽) 영역 픽셀 샘플링으로 아이섀도우 색상 추출.
+    Gemini의 present/position 판단은 유지하고, color만 OpenCV로 대체.
+    """
+    img = cv2.imread(image_path)
+    if img is None:
+        return []
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    h, w = img.shape[:2]
+
+    with open(landmarks_path) as f:
+        lm_data = json.load(f)
+    lm = lm_data[0]["landmarks"]
+
+    # 눈꺼풀 영역: 눈 위쪽 끝(lm[11]/lm[16]) ~ 눈썹 아래(lm[3-5]/lm[6-8])
+    eye_regions = [
+        {
+            "cx":       int(lm[14][0]),
+            "eye_top":  int(lm[11][1]),
+            "brow_bot": int((lm[3][1] + lm[4][1] + lm[5][1]) / 3),
+            "rx":       max(4, int(abs(lm[12][0] - lm[10][0]) / 2)),
+        },
+        {
+            "cx":       int(lm[19][0]),
+            "eye_top":  int(lm[16][1]),
+            "brow_bot": int((lm[6][1] + lm[7][1] + lm[8][1]) / 3),
+            "rx":       max(4, int(abs(lm[17][0] - lm[15][0]) / 2)),
+        },
+    ]
+
+    all_pixels = []
+    for er in eye_regions:
+        cx, rx = er["cx"], er["rx"]
+        y_top = min(er["brow_bot"], er["eye_top"])
+        y_bot = er["eye_top"] - 1
+        if y_top >= y_bot:
+            continue
+        for py in range(max(0, y_top), min(h, y_bot)):
+            for px in range(max(0, cx - rx), min(w, cx + rx)):
+                p = img_rgb[py, px]
+                v = int(max(p))
+                chroma = v - int(min(p))
+                if v < 30 or (v > 230 and chroma < 30):
+                    continue
+                all_pixels.append(p)
+
+    if not all_pixels:
+        return []
+
+    arr = np.array(all_pixels, dtype=np.float32)
+    med = np.median(arr, axis=0)
+    return [int(med[0]), int(med[1]), int(med[2])]
 
 
 if __name__ == "__main__":
