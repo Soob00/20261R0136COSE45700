@@ -52,7 +52,7 @@ TexturingPipeline은 Gemini API와 OpenCV를 혼용해 캐릭터의 피부톤, �
 
 * 🤖 **Gemini + OpenCV 역할 분리:**
     * 시각적 판단이 필요한 특징(볼터치, 점, 눈썹, 아이라인 타입 등)은 Gemini가 structured output(JSON)으로 추출
-    * 정확한 픽셀 값이 필요한 특징(홍채 5방향 색상, 상단 그라데이션 비율 등)은 OpenCV가 landmark 기반 좌표에서 직접 샘플링
+    * 정확한 픽셀 값이 필요한 특징(홍채 5방향 색상 등)은 OpenCV가 landmark 기반 좌표에서 직접 샘플링
 
 * ⚡ **배치 처리 및 캐싱:**
     * `input/` 폴더의 모든 이미지를 일괄 처리
@@ -72,7 +72,7 @@ input/캐릭터.png
     ↓
 [2단계] Gemini API (gemini-2.5-flash)
     → 피부톤, 볼터치, 점, 눈썹, 아이라인 타입(eyeline_type) 등 추출
-    → OpenCV로 홍채 5방향 색상·상단 그라데이션 비율 샘플링 (override)
+    → OpenCV로 홍채 5방향 색상 샘플링 (override)
     → output/캐릭터명/features.json
     ↓
 [3단계] OpenCV
@@ -198,12 +198,12 @@ assets/textures/eyeline/
 
 ### 홍채 색상 샘플링
 
-홍채를 상/하/좌/우/중앙 5방향 부채꼴 영역으로 나눠 각 방향의 지배적인 색상을 직접 샘플링한다. 안광(흰색 하이라이트) 영역을 자동으로 제외하고 채도가 가장 높은 픽셀을 선택한다.
+홍채를 상/하/좌/우/중앙 5방향 부채꼴 영역으로 나눠 각 방향의 대표 색상을 직접 샘플링한다.
 
-| 홍채 5방향 샘플링 영역 |
-| :---: |
-| ![](docs/img/iris_sector_firefly.png) |
-| 초록=상단, 빨강=하단, 파랑=좌, 주황=우, 마젠타=중앙 |
+* **상/하/좌/우**: `sample_sector` — r=0.2~0.8 구간, 채도 상위 25% 픽셀 평균. 안광(V>200, chroma<40)과 동공(V<30) 픽셀 자동 제외
+* **중앙**: `sample_center` — r<0.15 좁은 반경에서 MEDIAN 사용. 넓은 반경에서 흔한 하이라이트 오염 방지
+
+상단-하단 그라데이션은 `iris_top_color` / `iris_bottom_color`의 V값(= `max(R,G,B)`) 비율로 자동 계산된다. `top_shadow_ratio` 필드는 features.json에 기록되지만 현재 렌더링에는 사용되지 않는다.
 
 ---
 
@@ -265,9 +265,9 @@ UV 텍스처가 좌우 대칭 구조이므로, 좌우 쌍의 점은 텍스처에
 * **Gemini 503 에러:** 일시적인 서버 과부하. 자동 재시도(최대 5회, 15초 간격)되므로 대기하면 된다.
 * **features.json이 업데이트되지 않음:** 캐싱으로 인해 기존 파일을 재사용하는 것. 재추출하려면 해당 파일을 삭제 후 실행한다.
 * **점 위치가 어긋남:** Gemini의 `offset_y` 추출이 부정확한 경우. `output/캐릭터명/features.json`에서 `markings` 항목의 `offset_y` 값을 직접 수정 후 `python3 src/adjust_texture.py`만 재실행한다.
-* **홍채 색상이 부정확함:** `debug/iris_sector_캐릭터명.png`로 샘플링 영역이 실제 홍채 위에 찍혔는지 확인한다. 안광(흰색 하이라이트)이 샘플링 영역과 겹치는 경우 발생할 수 있다.
-* **볼터치가 이상한 위치에 찍힘:** `debug/blush_uv_debug.png`로 UV 좌표가 올바른지 확인한다.
-* **눈동자 색상이 지나치게 어둡거나 밝음:** `output/캐릭터명/features.json`에서 `iris_top_color` / `iris_bottom_color`의 V값 비율이 적절한지 확인한다. 그라데이션이 너무 강하면 `top_shadow_ratio` 값을 낮춰 재실행한다.
+* **홍채 색상이 부정확함:** `output/캐릭터명/features.json`에서 `iris_top_color` / `iris_bottom_color` / `iris_center_color` 값을 확인한다. 안광(흰색 하이라이트)이 샘플링 영역과 겹치면 색상이 밝게 추출될 수 있다. 수동 수정 후 `python3 src/adjust_texture.py`만 재실행한다.
+* **볼터치가 이상한 위치에 찍힘:** `features.json`의 `blush_position` 값을 직접 수정 후 재실행한다.
+* **눈동자 상단-하단 그라데이션이 과하거나 약함:** 그라데이션은 `iris_top_color`와 `iris_bottom_color`의 V값 비율로 결정된다. `features.json`에서 해당 색상 값을 조정 후 재실행한다. (`top_shadow_ratio` 필드는 현재 렌더링에 사용되지 않는다.)
 * **아이라인 타입이 잘못 선택됨:** `features.json`의 `eyeline_type` 값을 직접 수정(`simple`/`simplelash`/`cute`/`cutelash`/`maturelash`) 후 `python3 src/adjust_texture.py`만 재실행한다. 해당 파일이 `assets/textures/eyeline/` 에 존재해야 한다.
 
 ---
