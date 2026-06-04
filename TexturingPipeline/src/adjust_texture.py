@@ -286,6 +286,61 @@ def adjust_eyebrow(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
     return result
 
 
+def add_face_eyeshadow(
+    texture_bgra: np.ndarray,
+    eyeline_features: dict,
+) -> np.ndarray:
+    """아이섀도우를 Face 텍스처의 눈 주변 UV 영역에 타원형 오버레이로 렌더링."""
+    result = texture_bgra.copy()
+    h, w = result.shape[:2]
+    alpha = result[:, :, 3]
+
+    color_rgb = eyeline_features.get("eyeshadow_color", [180, 160, 180])
+    opacity   = eyeline_features.get("eyeshadow_opacity", 0.5)
+    position  = eyeline_features.get("eyeshadow_position", "lid_only")
+
+    shadow_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])
+
+    # position별 눈 위 Y 오프셋 (UV 공간, 눈 위쪽 = 작은 Y)
+    EYE_Y_UV = 0.541  # 눈 UV Y 좌표
+    if position == "lid_only":
+        y_off, ry_uv = 0.025, 0.018   # 눈꺼풀 좁게
+    elif position == "lid_and_crease":
+        y_off, ry_uv = 0.040, 0.030   # 쌍커풀까지 넓게
+    elif position == "under_eye":
+        y_off, ry_uv = -0.018, 0.018  # 눈 아래쪽
+    else:  # full
+        y_off, ry_uv = 0.040, 0.040
+
+    # 좌/우 눈 UV X 좌표
+    for eye_x_uv in [0.341, 0.657]:
+        cx = int(eye_x_uv * w)
+        cy = int((EYE_Y_UV - y_off) * h)
+        rx = int(0.075 * w)
+        ry = max(int(ry_uv * h), 2)
+
+        mask = np.zeros((h, w), dtype=np.float32)
+        cv2.ellipse(mask, (cx, cy), (rx, ry), 0, 0, 360, 1.0, -1)
+
+        blur_k = max(int(ry * 2.5) | 1, 5)
+        mask = cv2.GaussianBlur(mask, (blur_k, blur_k), 0)
+        mask = np.clip(mask * opacity, 0, 1) * (alpha > 0).astype(np.float32)
+
+        m3 = mask[:, :, np.newaxis]
+        layer = np.full((h, w, 3), shadow_bgr, dtype=np.float32)
+        result[:, :, :3] = np.where(
+            m3 > 0,
+            np.clip(
+                result[:, :, :3].astype(np.float32) * (1 - m3 * 0.65) +
+                layer * m3 * 0.65,
+                0, 255
+            ).astype(np.uint8),
+            result[:, :, :3]
+        )
+
+    return result
+
+
 def adjust_eyeline(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
     eyeline = features["eyeline"]
     result = texture_bgra.copy()
@@ -333,138 +388,217 @@ def adjust_eyeline(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
 
 def adjust_pupil(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
     """
-    BaseTexture 원본 질감을 유지하면서 색상만 위치별로 보정.
-    하이라이트는 반투명 오버레이로만 적용.
+    LAB 색공간 기반 홍채 색상 보정.
+    - L: 원본 상대 밝기(p5~p95, gamma=0.6) × 위치별 타겟 L → 밝기 부스트 + 링·동공 구조 보존
+    - A, B: 타겟 85% + 원본 15% 블렌드 → 색상을 강하게 반영하면서 원본 질감 유지
+    HSV hue rotation 대신 LAB 직접 블렌드를 사용하여 방향 계산 오류 없이 색상 적용.
     """
     pupil = features.get("pupil", {})
     h, w = texture_bgra.shape[:2]
     result = texture_bgra.copy()
     alpha = texture_bgra[:, :, 3]
 
-    def rgb2bgr(c): return (c[2], c[1], c[0])
+    def bgr_list(rgb): return [rgb[2], rgb[1], rgb[0]]
 
-    top    = np.array(rgb2bgr(pupil.get("iris_top_color",    [150, 100, 200])), dtype=np.float32)
-    bottom = np.array(rgb2bgr(pupil.get("iris_bottom_color", [200, 180, 220])), dtype=np.float32)
-    left   = np.array(rgb2bgr(pupil.get("iris_left_color",   [160, 120, 180])), dtype=np.float32)
-    right  = np.array(rgb2bgr(pupil.get("iris_right_color",  [160, 120, 180])), dtype=np.float32)
-    center = np.array(rgb2bgr(pupil.get("iris_center_color", [130, 100, 160])), dtype=np.float32)
+    DIRS = ["top", "bottom", "left", "right", "center"]
+    FIELDS = {
+        "top":    ("iris_top_color",    [150, 100, 200]),
+        "bottom": ("iris_bottom_color", [200, 180, 220]),
+        "left":   ("iris_left_color",   [160, 120, 180]),
+        "right":  ("iris_right_color",  [160, 120, 180]),
+        "center": ("iris_center_color", [130, 100, 160]),
+    }
+    tgt_bgr_dirs = {
+        d: np.array(bgr_list(pupil.get(FIELDS[d][0], FIELDS[d][1])), dtype=np.float32)
+        for d in DIRS
+    }
 
-    # UV 기반 좌/우 눈 영역
+    # BaseTexture 실측 기반 좌/우 눈 영역
     eyes = [
-        {"cx": int(0.250 * w), "cy": int(0.512 * h), "rx": int(0.115 * w), "ry": int(0.260 * h)},
-        {"cx": int(0.750 * w), "cy": int(0.512 * h), "rx": int(0.115 * w), "ry": int(0.260 * h)},
+        {"cx": int(0.2515 * w), "cy": int(0.5078 * h), "rx": int(0.1079 * w), "ry": int(0.2441 * h)},
+        {"cx": int(0.7476 * w), "cy": int(0.5078 * h), "rx": int(0.1079 * w), "ry": int(0.2441 * h)},
     ]
 
-    def apply_pupil_darkening(img, cx, cy, rx, ry, pupil_ratio, pupil_color_bgr, pupil_cx_offset=6):
-        """동공 색상 적용 + 경계 안쪽으로 어두운 림 효과"""
-        pr  = int(rx * pupil_ratio)
-        pry = int(ry * pupil_ratio)
-        pcx = cx + pupil_cx_offset
+    # 타겟 색상 강도 (1.0 = 완전 타겟, 0.0 = 완전 원본)
+    COLOR_STR = 0.90
+    # 채도 강화 배율 (LAB A·B의 neutral(128) 대비 편차를 증폭)
+    CHROMA_BOOST = 1.3
 
-        alpha = img[:, :, 3]
-        valid = alpha > 0
-
-        # 동공 마스크
-        pupil_mask = np.zeros((h, w), dtype=np.float32)
-        cv2.ellipse(pupil_mask, (pcx, cy), (pr, pry), 0, 0, 360, 1.0, -1)
-
-        # 림(limbal ring): 동공 경계 안쪽에서 안으로 페이드아웃 (절반으로 줄임)
-        rim_width = max(int(pr * 0.18), 3)
-        inner_mask = np.zeros((h, w), dtype=np.float32)
-        cv2.ellipse(inner_mask, (pcx, cy), (max(pr-rim_width, 2), max(pry-rim_width, 2)), 0, 0, 360, 1.0, -1)
-
-        rim_mask = np.clip(pupil_mask - inner_mask, 0, 1)
-        rim_mask = cv2.GaussianBlur(rim_mask, (rim_width*2+1, rim_width*2+1), 0)
-
-        # HSV로 채도 올리고 Value 낮추는 방식으로 림 처리
-        m = rim_mask[:, :, np.newaxis]
-        orig_f = img[:, :, :3].astype(np.uint8)
-        orig_hsv = cv2.cvtColor(orig_f, cv2.COLOR_BGR2HSV).astype(np.float32)
-
-        # 채도 +40%, Value -20%
-        boosted_s = np.clip(orig_hsv[:,:,1] * 1.4, 0, 255)
-        lowered_v = np.clip(orig_hsv[:,:,2] * 0.8, 0, 255)
-
-        modified_hsv = orig_hsv.copy()
-        modified_hsv[:,:,1] = boosted_s
-        modified_hsv[:,:,2] = lowered_v
-        modified_bgr = cv2.cvtColor(modified_hsv.astype(np.uint8), cv2.COLOR_HSV2BGR).astype(np.float32)
-
-        img[:, :, :3] = np.where(
-            (rim_mask[:, :, np.newaxis] > 0) & valid[:, :, np.newaxis],
-            np.clip(orig_f.astype(np.float32) * (1 - m) + modified_bgr * m, 0, 255).astype(np.uint8),
-            img[:, :, :3]
-        )
-        return img
-
-    for eye in eyes:
+    for eye_idx, eye in enumerate(eyes):
         cx, cy, rx, ry = eye["cx"], eye["cy"], eye["rx"], eye["ry"]
 
-        for py in range(max(0, cy - ry), min(h, cy + ry)):
-            for px in range(max(0, cx - rx), min(w, cx + rx)):
-                if alpha[py, px] == 0:
-                    continue
+        y0 = max(0, cy - ry);  y1 = min(h, cy + ry)
+        x0 = max(0, cx - rx);  x1 = min(w, cx + rx)
 
-                nx = (px - cx) / rx  # -1~1
-                ny = (py - cy) / ry  # -1~1
-                if nx*nx + ny*ny > 1.0:
-                    continue
+        PY, PX = np.mgrid[y0:y1, x0:x1]
+        NX = (PX - cx).astype(np.float32) / rx
+        NY = (PY - cy).astype(np.float32) / ry
+        R  = np.sqrt(NX**2 + NY**2)
+        in_iris = (R <= 1.0) & (alpha[y0:y1, x0:x1] > 0)
 
-                # 5방향 가중치 보간으로 타겟 색상 계산
-                w_top    = max(0, -ny)
-                w_bottom = max(0,  ny)
-                w_left   = max(0, -nx)
-                w_right  = max(0,  nx)
-                w_center = max(0, 1 - (abs(nx) + abs(ny)))
-                total = w_top + w_bottom + w_left + w_right + w_center + 1e-6
+        # 5방향 가중치
+        wt   = np.maximum(0.0, -NY)
+        wb   = np.maximum(0.0,  NY)
+        wl   = np.maximum(0.0, -NX)
+        wr   = np.maximum(0.0,  NX)
+        wc   = np.maximum(0.0, 1.0 - (np.abs(NX) + np.abs(NY)))
+        wtot = wt + wb + wl + wr + wc + 1e-6
+        weights = [wt, wb, wl, wr, wc]
 
-                target_bgr = (
-                    top * w_top + bottom * w_bottom +
-                    left * w_left + right * w_right +
-                    center * w_center
-                ) / total
+        # 위치별 타겟 BGR (5방향 가중 보간) → LAB 변환
+        tgt_b = sum(tgt_bgr_dirs[DIRS[i]][0] * weights[i] for i in range(5)) / wtot
+        tgt_g = sum(tgt_bgr_dirs[DIRS[i]][1] * weights[i] for i in range(5)) / wtot
+        tgt_r = sum(tgt_bgr_dirs[DIRS[i]][2] * weights[i] for i in range(5)) / wtot
+        tgt_bgr_img = np.stack([tgt_b, tgt_g, tgt_r], axis=-1).clip(0, 255).astype(np.uint8)
 
-                # 원본 밝기 비율을 타겟 밝기 기준으로 리매핑 후 색상 적용
-                orig = result[py, px, :3].astype(np.uint8)
-                orig_hsv = cv2.cvtColor(orig.reshape(1,1,3), cv2.COLOR_BGR2HSV)[0][0].astype(np.float32)
-                tgt_hsv  = cv2.cvtColor(target_bgr.reshape(1,1,3).astype(np.uint8), cv2.COLOR_BGR2HSV)[0][0].astype(np.float32)
+        orig_crop = result[y0:y1, x0:x1, :3].astype(np.uint8)
+        orig_lab  = cv2.cvtColor(orig_crop,   cv2.COLOR_BGR2LAB).astype(np.float32)
+        tgt_lab   = cv2.cvtColor(tgt_bgr_img, cv2.COLOR_BGR2LAB).astype(np.float32)
 
-                orig_v_norm = orig_hsv[2] / 255.0
-                tgt_v = tgt_hsv[2]
-                remapped_v = np.clip(tgt_v * 0.7 + orig_v_norm * tgt_v * 0.6, 0, 255)
+        # 베이스 텍스처 기준 동공/홍채 경계
+        PUPIL_R   = 0.35
+        L_FLOOR   = 0.50
+        L_MIN_TGT = 150.0
 
-                new_hsv = np.array([tgt_hsv[0], tgt_hsv[1], remapped_v], dtype=np.uint8)
-                new_bgr = cv2.cvtColor(new_hsv.reshape(1,1,3), cv2.COLOR_HSV2BGR)[0][0]
-                result[py, px, :3] = new_bgr
+        # ── 링 위치 파라미터 (앞에서 정의 — blend·그라데이션과 기준 통일) ──
+        RING_R      = PUPIL_R + 0.017   # 동공 상하좌우 각 2px 확대 (2/117.5≈0.017)
+        RING_NY_OFF = 0.032
+        RING_NX_OFF = 0.036
+        RING_SIGMA  = 0.015
+        MAX_DARKEN  = 0.45
+        nx_sign     = +1.0 if eye_idx == 0 else -1.0
+        NX_ring = NX - nx_sign * RING_NX_OFF
+        NY_ring = NY - RING_NY_OFF
+        R_ring  = np.sqrt(NX_ring**2 + NY_ring**2)
 
-        # 상단 그라데이션 (눈동자 위쪽 어둡게)
-        top_shadow = pupil.get("top_shadow_ratio", 0.3)
-        if top_shadow > 0:
-            for py in range(max(0, cy - ry), cy):
-                for px in range(max(0, cx - rx), min(w, cx + rx)):
-                    if result[py, px, 3] == 0:
-                        continue
-                    nx = (px - cx) / rx
-                    ny = (py - cy) / ry
-                    if nx*nx + ny*ny > 1.0:
-                        continue
-                    # 위쪽일수록 강하게 (ny가 -1에 가까울수록)
-                    t = (-ny) * top_shadow * 0.6
-                    orig_hsv = cv2.cvtColor(
-                        result[py, px, :3].reshape(1,1,3), cv2.COLOR_BGR2HSV
-                    )[0][0].astype(np.float32)
-                    orig_hsv[2] = np.clip(orig_hsv[2] * (1 - t), 0, 255)
-                    result[py, px, :3] = cv2.cvtColor(
-                        orig_hsv.astype(np.uint8).reshape(1,1,3), cv2.COLOR_HSV2BGR
-                    )[0][0]
+        L_all = orig_lab[:, :, 0][in_iris]
+        if len(L_all) > 0:
+            L_lo = float(np.percentile(L_all,  5))
+            L_hi = float(np.percentile(L_all, 95))
+        else:
+            L_lo, L_hi = 0.0, 255.0
+        L_range = max(L_hi - L_lo, 1.0)
+        orig_L_norm = np.clip((orig_lab[:, :, 0] - L_lo) / L_range, 0.0, 1.0)
 
-        # 동공 경계 어둡게 + 블렌딩 (고정 위치/크기)
-        pupil_color_bgr = tuple(reversed(pupil.get("pupil_color", [20, 10, 20])))
-        PUPIL_RATIO = 0.35   # BaseTexture 기준 고정값
-        pupil_offset = 6 if eye == eyes[0] else -6
-        result = apply_pupil_darkening(result, cx, cy, rx, ry, PUPIL_RATIO, pupil_color_bgr, pupil_cx_offset=pupil_offset)
+        # 동공/홍채 경계 블렌드 — R_ring 기준 (링 내부 = 동공, 외부 = 홍채)
+        BLEND_W = 0.07
+        blend_iris = np.clip((R_ring - RING_R + BLEND_W) / (BLEND_W * 2.0), 0.0, 1.0)
+
+        # ── 위치별 그라데이션 인자 (L 채널에 통합) ──────────────────
+        # iris_top/bottom V 비율로 위치별 배율을 tgt_lab_L에 곱함
+        # L_MIN_TGT 부스트 전에 적용해야 상단 어둡기가 인위적으로 올라가지 않음
+        v_top_g  = float(np.max(tgt_bgr_dirs["top"]))
+        v_bot_g  = float(np.max(tgt_bgr_dirs["bottom"]))
+        v_mean_g = max((v_top_g + v_bot_g) / 2.0, 1.0)
+        if abs(v_top_g - v_bot_g) / v_mean_g > 0.12:
+            t_pos     = np.clip((NY + 1.0) / 2.0, 0.0, 1.0)
+            pos_v_fac = ((v_top_g / v_mean_g) * (1.0 - t_pos)
+                        + (v_bot_g / v_mean_g) * t_pos)
+        else:
+            pos_v_fac = np.ones_like(NY, dtype=np.float32)
+
+        # ── A, B 채널 (홍채·내측 공통) ────────────────────────────
+        tgt_A_boosted = 128.0 + (tgt_lab[:, :, 1] - 128.0) * CHROMA_BOOST
+        tgt_B_boosted = 128.0 + (tgt_lab[:, :, 2] - 128.0) * CHROMA_BOOST
+        iris_A = orig_lab[:, :, 1] * (1 - COLOR_STR) + np.clip(tgt_A_boosted, 0, 255) * COLOR_STR
+        iris_B = orig_lab[:, :, 2] * (1 - COLOR_STR) + np.clip(tgt_B_boosted, 0, 255) * COLOR_STR
+
+        # ── L 채널: 외측(홍채) ────────────────────────────────────
+        # 그라데이션 적용 후 eff_L → L_MIN_TGT를 80으로 낮춰 상단 어둡기 보존
+        L_MIN_LOWER = 80.0
+        tgt_L_grad  = tgt_lab[:, :, 0] * pos_v_fac
+        eff_L       = np.maximum(tgt_L_grad, L_MIN_LOWER)
+        new_L_iris  = np.clip(eff_L * (L_FLOOR + orig_L_norm * (1.0 - L_FLOOR)), 0, 255)
+
+        # 내측(동공): iris_center V / iris 평균 V 비율로 L_FLOOR_INNER 동적 결정
+        v_center    = float(np.max(tgt_bgr_dirs["center"]))
+        v_iris_mean = float(np.mean([np.max(tgt_bgr_dirs[d])
+                                     for d in ["top", "bottom", "left", "right"]]))
+        pupil_v_ratio = v_center / max(v_iris_mean, 1.0)
+        L_FLOOR_INNER = float(np.clip(0.80 * pupil_v_ratio, 0.30, 0.90))
+
+        new_L_inner = np.clip(
+            tgt_lab[:, :, 0] * (L_FLOOR_INNER + orig_L_norm * (1.0 - L_FLOOR_INNER)), 0, 255
+        )
+
+        # ── 블렌드 ────────────────────────────────────────────────
+        new_L = blend_iris * new_L_iris + (1.0 - blend_iris) * new_L_inner
+        new_A = iris_A
+        new_B = iris_B
+
+        new_lab = orig_lab.copy()
+        new_lab[:, :, 0] = new_L
+        new_lab[:, :, 1] = np.clip(new_A, 0, 255)
+        new_lab[:, :, 2] = np.clip(new_B, 0, 255)
+        new_bgr = cv2.cvtColor(new_lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
+
+        mask3 = in_iris[:, :, np.newaxis]
+        result[y0:y1, x0:x1, :3] = np.where(mask3, new_bgr, result[y0:y1, x0:x1, :3])
+
+        # 상단-하단 그라데이션은 위의 L 채널 계산에 통합됨 (pos_v_fac)
+
+        # ── 동공 경계 링 (Multiply) ──────────────────────────────
+        # NX_ring, NY_ring, R_ring, RING_R, RING_SIGMA, MAX_DARKEN 은 위에서 정의됨
+        ring_gauss = np.exp(-((R_ring - RING_R) / RING_SIGMA) ** 2)
+
+        center_v = float(np.max(tgt_bgr_dirs["center"]))   # iris_center_color V
+        ring_str = np.clip(center_v / 255.0, 0.2, 1.0)    # 밝은 동공 → 강한 링
+        ring_mult = 1.0 - ring_gauss * ring_str * MAX_DARKEN
+
+        ring_region = result[y0:y1, x0:x1, :3].astype(np.uint8)
+        ring_hsv    = cv2.cvtColor(ring_region, cv2.COLOR_BGR2HSV).astype(np.float32)
+        ring_hsv[:, :, 2] = np.where(
+            in_iris,
+            np.clip(ring_hsv[:, :, 2] * ring_mult, 0, 255),
+            ring_hsv[:, :, 2]
+        )
+        result[y0:y1, x0:x1, :3] = cv2.cvtColor(
+            ring_hsv.astype(np.uint8), cv2.COLOR_HSV2BGR
+        )
+
+    return result
 
 
+def adjust_highlight(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
+    """안광 텍스처에 features.json 기반 하이라이트 렌더링."""
+    pupil = features.get("pupil", {})
+    highlights = pupil.get("highlights", [])
+
+    if not highlights:
+        return texture_bgra
+
+    result = texture_bgra.copy()
+    h, w = result.shape[:2]
+
+    # BaseTexture 실측 기반 양쪽 눈 UV 중심/반경
+    EYE_CX   = [0.2515, 0.7476]
+    EYE_CY   = 0.5078
+    EYE_RX   = 0.1079
+    EYE_RY   = 0.2441
+
+    for hl in highlights:
+        nx         = hl.get("nx", 0.0)
+        ny         = hl.get("ny", 0.0)
+        size_ratio = hl.get("size_ratio", 0.01)
+        shape      = hl.get("shape", "circle")
+
+        for ecx_ratio in EYE_CX:
+            ecx = int(ecx_ratio * w)
+            ecy = int(EYE_CY   * h)
+            erx = int(EYE_RX   * w)
+            ery = int(EYE_RY   * h)
+
+            hx = int(ecx + nx * erx)
+            hy = int(ecy + ny * ery)
+            hr = max(2, int(erx * np.sqrt(size_ratio) * 1.5))
+
+            if shape == "oval":
+                cv2.ellipse(result, (hx, hy), (hr, max(2, hr // 2)),
+                            0, 0, 360, (255, 255, 255, 255), -1)
+            else:  # circle / star → 원형
+                cv2.circle(result, (hx, hy), hr, (255, 255, 255, 255), -1)
+                # 소프트 엣지
+                cv2.circle(result, (hx, hy), hr + 2, (255, 255, 255, 100), 1)
 
     return result
 
@@ -485,17 +619,25 @@ def process(input_dir: str, output_dir: str, features: dict):
         print("landmarks.json 없음 — blush/marking 적용 스킵\n")
 
     generate_targets = [
-        ("BaseTexture_Generate_Face.png",    adjust_face,    "Face 피부톤 + 볼터치 + 점"),
-        ("BaseTexture_Generate_Eyebrow.png", adjust_eyebrow, "Eyebrow 눈썹"),
-        ("BaseTexture_Generate_Eyeline.png", adjust_eyeline, "Eyeline 쌍커풀 + 아이라인"),
-        ("BaseTexture_Generate_Pupil.png",   adjust_pupil,   "Pupil 눈동자"),
+        ("BaseTexture_Generate_Face.png",      adjust_face,      "Face 피부톤 + 볼터치 + 점"),
+        ("BaseTexture_Generate_Eyebrow.png",   adjust_eyebrow,   "Eyebrow 눈썹"),
+        ("BaseTexture_Generate_Pupil.png",     adjust_pupil,     "Pupil 눈동자"),
+        ("BaseTexture_Static_EyeHighlight.png", adjust_highlight, "EyeHighlight 안광"),
     ]
 
     static_targets = [
         "BaseTexture_Static_EyeWhite.png",
-        "BaseTexture_Static_EyeHighlight.png",
         "BaseTexture_Static_MouthInside.png",
     ]
+
+    # Eyeline: eyeline_type 기반으로 assets/eyeline/ 에서 베이스 선택 후 복사
+    # assets/eyeline/ 경로: input_dir(assets/textures)의 상위 폴더 기준
+    eyeline_dir  = Path(input_dir) / "eyeline"
+    eyeline_type = features.get("eyeline", {}).get("eyeline_type", "default")
+    eyeline_src  = eyeline_dir / f"eyeline_{eyeline_type}.png"
+    if not eyeline_src.exists():
+        eyeline_src = eyeline_dir / "eyeline_default.png"   # 폴백
+    eyeline_dst = Path(output_dir) / "BaseTexture_Generate_Eyeline.png"
 
     print("=== Generate 텍스처 보정 ===\n")
     for tex_name, adjust_fn, label in generate_targets:
@@ -529,7 +671,15 @@ def process(input_dir: str, output_dir: str, features: dict):
         else:
             print(f"  건너뜀: {name} 없음")
 
-    print(f"\n완료. 결과 폴더: {output_dir}")
+    print("\n=== Eyeline 베이스 선택 ===\n")
+    if eyeline_src.exists():
+        shutil.copy2(str(eyeline_src), str(eyeline_dst))
+        print(f"  선택: {eyeline_src.name}  (type={eyeline_type})")
+        print(f"  복사: {eyeline_dst}\n")
+    else:
+        print(f"  건너뜀: eyeline 베이스 없음 ({eyeline_src})\n")
+
+    print(f"완료. 결과 폴더: {output_dir}")
 
 
 if __name__ == "__main__":
