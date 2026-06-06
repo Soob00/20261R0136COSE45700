@@ -72,7 +72,21 @@ export async function POST(request: NextRequest) {
     const imagePath = join(workDir, 'input.png');
     await writeFile(imagePath, imageBuffer);
 
-    // Step 1: Extract features (Gemini API)
+    // Step 1: kanosawa landmarks 먼저 추출 — extract_features.py의 OpenCV 색상 샘플링에 필요
+    const landmarksJson = join(workDir, 'landmarks.json');
+    const landmarkOutput = join(workDir, 'landmarks_annotated.png');
+    try {
+      await runPython(
+        join(KANOSAWA_DIR, 'extract_landmarks.py'),
+        [imagePath, landmarkOutput, '--landmarks_json', landmarksJson],
+        KANOSAWA_DIR,
+        'extract_landmarks',
+      );
+    } catch (e) {
+      console.warn('[TexturePipeline] Landmark extraction failed, iris color sampling will use Gemini only:', e);
+    }
+
+    // Step 2: Extract features (Gemini API + OpenCV iris sampling with landmarks)
     const featuresJson = join(workDir, 'features.json');
     await runPython(
       join(PIPELINE_DIR, 'extract_features.py'),
@@ -81,11 +95,10 @@ export async function POST(request: NextRequest) {
       'extract_features',
     );
 
-    // Step 2: ADF face-keys + texture adjustment (parallel)
+    // Step 3: ADF face-keys + texture adjustment (parallel)
     const outputDir = join(workDir, 'output');
     const faceKeysJson = join(workDir, 'face_keys.json');
     const hairMatchJson = join(workDir, 'hair_match.json');
-    const landmarksJson = join(workDir, 'landmarks.json');
 
     const [, faceKeysInitResult] = await Promise.allSettled([
       runPython(
@@ -125,14 +138,7 @@ export async function POST(request: NextRequest) {
         console.warn('[TexturePipeline] Hairstyle analysis failed:', e);
       }
     } else {
-      console.log('[TexturePipeline] ADF failed, running kanosawa fallback');
-      const landmarkOutput = join(workDir, 'landmarks_annotated.png');
-      await runPython(
-        join(KANOSAWA_DIR, 'extract_landmarks.py'),
-        [imagePath, landmarkOutput, '--landmarks_json', landmarksJson],
-        KANOSAWA_DIR,
-        'extract_landmarks (fallback)',
-      );
+      console.log('[TexturePipeline] ADF failed, using kanosawa landmarks (already extracted in Step 1)');
 
       // Retry face-keys with kanosawa + hairstyle (parallel)
       await Promise.allSettled([
