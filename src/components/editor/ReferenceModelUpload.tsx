@@ -43,6 +43,7 @@ function isModelFile(name: string): boolean {
 export function ReferenceModelUpload() {
   const [status, setStatus] = useState<Status>('idle');
   const [textureStatus, setTextureStatus] = useState<TextureStatus>('idle');
+  const [geminiFallback, setGeminiFallback] = useState(false);
 
   const [result, setResult] = useState<Result | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -55,6 +56,7 @@ export function ReferenceModelUpload() {
   const setHairRecommendation = useEditorStore((s) => s.setHairRecommendation);
   const applyTextureResult = useEditorStore((s) => s.applyTextureResult);
   const applyPipelineResult = useEditorStore((s) => s.applyPipelineResult);
+  const setProposedStamps = useEditorStore((s) => s.setProposedStamps);
 
   function applyRecommendation(recommendation: HairRecommendation, applyColor: boolean) {
     const { bestMatch, extractedColor, confidence } = recommendation;
@@ -92,6 +94,7 @@ export function ReferenceModelUpload() {
 
       setResult(null);
       setErrorMsg('');
+      setGeminiFallback(false);
 
       // Run hair matching (client) and texture pipeline (server) in parallel
       const hairPromise = recommendHairPresetFromImage(file);
@@ -145,6 +148,11 @@ export function ReferenceModelUpload() {
       // Apply texture pipeline result
       if (textureResult.status === 'fulfilled') {
         const { textures, features } = textureResult.value;
+        const isFallback = !!(features as Record<string, unknown> | null)?._gemini_fallback;
+        if (isFallback) {
+          setGeminiFallback(true);
+          console.warn('[ReferenceUpload] Gemini unavailable — textures generated with defaults');
+        }
         if (textures && Object.keys(textures).length > 0) {
           applyTextureResult(textures);
           setTextureStatus('success');
@@ -152,6 +160,16 @@ export function ReferenceModelUpload() {
         } else {
           setTextureStatus('error');
           console.warn('[ReferenceUpload] Texture pipeline returned no textures');
+        }
+
+        // Proposed stamps (markings + highlights) → stamp editor
+        const ps = textureResult.value.proposedStamps;
+        if (ps) {
+          const total = Object.values(ps).reduce((n, arr) => n + arr.length, 0);
+          if (total > 0) {
+            setProposedStamps(ps as Record<string, import('@/types/editor').ProposedStampItem[]>);
+            console.log(`[ReferenceUpload] Proposed stamps dispatched: ${total}`);
+          }
         }
 
         // Use Gemini visual hair match (direct image-to-thumbnail comparison)
@@ -230,7 +248,7 @@ export function ReferenceModelUpload() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [setHairFront, setHairBack, setHairColor, setHairRecommendation, applyTextureResult, applyPipelineResult],
+    [setHairFront, setHairBack, setHairColor, setHairRecommendation, applyTextureResult, applyPipelineResult, setProposedStamps],
   );
 
   const processModelFile = useCallback(
@@ -396,8 +414,11 @@ export function ReferenceModelUpload() {
                 <span className="text-[10px] text-muted-foreground">텍스처 생성 중...</span>
               </div>
             )}
-            {textureStatus === 'success' && (
+            {textureStatus === 'success' && !geminiFallback && (
               <span className="text-[10px] text-emerald-500">텍스처 적용 완료</span>
+            )}
+            {textureStatus === 'success' && geminiFallback && (
+              <span className="text-[10px] text-amber-500">텍스처 적용됨 (AI 크레딧 부족 — 기본값 사용)</span>
             )}
             {textureStatus === 'error' && (
               <span className="text-[10px] text-amber-500">텍스처 생성 실패 (헤어만 적용됨)</span>

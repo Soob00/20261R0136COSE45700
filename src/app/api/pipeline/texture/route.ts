@@ -30,7 +30,8 @@ const TEXTURE_SLOT_MAP: Record<string, RegExp> = {
   'BaseTexture_Generate_Eyeline.png': /eyeline|eyelash|eyelid/i,
   'BaseTexture_Generate_Pupil.png': /eye|iris|pupil/i,
   'BaseTexture_Static_EyeWhite.png': /sclera|eyewhite/i,
-  'BaseTexture_Static_EyeHighlight.png': /highlight/i,
+  // BaseTexture_Static_EyeHighlight 는 파이프라인이 건드리지 않음
+  // → VRM 원본 유지, 안광은 스탬프(Pupil 슬롯)로만 적용
   'BaseTexture_Static_MouthInside.png': /mouth/i,
 };
 
@@ -173,11 +174,12 @@ export async function POST(request: NextRequest) {
       textures[slotKey] = dataUrl;
     }
 
-    // Read features, landmarks, hair match, and face-keys for frontend use
+    // Read features, landmarks, hair match, face-keys, and proposed stamps for frontend use
     let features: unknown = null;
     let landmarks: unknown = null;
     let hairMatch: unknown = null;
     let faceKeys: unknown = null;
+    let proposedStamps: unknown = null;
     try {
       if (existsSync(featuresJson)) {
         features = JSON.parse(await readFile(featuresJson, 'utf-8'));
@@ -193,6 +195,12 @@ export async function POST(request: NextRequest) {
         faceKeys = JSON.parse(await readFile(faceKeysJson, 'utf-8'));
         console.log('[TexturePipeline] Face keys extracted');
       }
+      const proposedStampsJson = join(outputDir, 'proposed_stamps.json');
+      if (existsSync(proposedStampsJson)) {
+        proposedStamps = JSON.parse(await readFile(proposedStampsJson, 'utf-8'));
+        const total = Object.values(proposedStamps as Record<string, unknown[]>).reduce((n, v) => n + v.length, 0);
+        console.log(`[TexturePipeline] Proposed stamps: ${total}`);
+      }
     } catch {
       // non-critical
     }
@@ -204,10 +212,16 @@ export async function POST(request: NextRequest) {
       .then(() => console.log(`[TexturePipeline] Debug saved: ${debugOut}`))
       .catch((e) => console.warn('[TexturePipeline] Debug save failed:', e));
 
-    return NextResponse.json({ textures, features, landmarks, hairMatch, faceKeys });
+    return NextResponse.json({ textures, features, landmarks, hairMatch, faceKeys, proposedStamps });
   } catch (err) {
     console.error('[TexturePipeline] Error:', err);
     const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message.includes('RESOURCE_EXHAUSTED') || message.includes('prepayment credits') || message.includes('429')) {
+      return NextResponse.json(
+        { error: 'Gemini API 크레딧이 소진되었습니다. AI Studio(https://ai.studio/projects)에서 결제를 확인해주세요.' },
+        { status: 402 },
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   } finally {
     // Cleanup temp directory

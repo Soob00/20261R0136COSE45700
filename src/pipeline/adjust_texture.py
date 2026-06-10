@@ -273,8 +273,7 @@ def adjust_face(texture_bgra: np.ndarray, features: dict, lm: list = None, img_w
             lm, img_w, img_h
         )
 
-    if lm and face.get("markings"):
-        result = add_markings(result, face["markings"], lm, img_w, img_h)
+    # markings는 adjust_texture에서 직접 그리지 않음 — proposed_stamps.json으로 내보내 웹 에디터에서 스탬프로 처리
 
     return result
 
@@ -582,47 +581,18 @@ def adjust_pupil(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
             np.clip(_new_plab, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR
         )
 
-        # ── 안광 (features.json highlights → Pupil 텍스처에 렌더링) ─────────────
-        # input 이미지에서 추출된 nx, ny를 텍스처 홍채 좌표계로 매핑하여 합성.
-        _iris_area_tex = np.pi * rx * ry
-        for _hl in pupil.get("highlights", []):
-            _hnx        = float(_hl.get("nx", 0.0))
-            _hny        = float(_hl.get("ny", 0.0))
-            _size_ratio = float(_hl.get("size_ratio", 0.01))
-            _hshape     = _hl.get("shape", "oval")
-
-            if _hnx**2 + _hny**2 > 1.0:
-                continue
-
-            # 텍스처 좌표 → crop 좌표계
-            _hx_c = int(cx + _hnx * rx) - x0
-            _hy_c = int(cy + _hny * ry) - y0
-            _hr   = max(2, int(np.sqrt(_size_ratio * _iris_area_tex / np.pi)))
-
-            _hl_brightness = float(_hl.get("brightness", 1.0))
-
-            _hl_mask = np.zeros(in_iris.shape, dtype=np.uint8)
-            if _hshape == "oval":
-                cv2.ellipse(_hl_mask, (_hx_c, _hy_c),
-                            (_hr, max(2, _hr // 2)), 0, 0, 360, 255, -1)
-            else:
-                cv2.circle(_hl_mask, (_hx_c, _hy_c), _hr, 255, -1)
-
-            # brightness 비율로 흰색 블렌딩 — 덜 밝은 안광은 눈동자 색이 비침
-            _hl_on_iris = (_hl_mask > 0) & in_iris
-            _after_hl   = result[y0:y1, x0:x1, :3].astype(np.float32)
-            _after_hl[_hl_on_iris] = np.clip(
-                _after_hl[_hl_on_iris] * (1.0 - _hl_brightness) + 255.0 * _hl_brightness,
-                0, 255
-            )
-            result[y0:y1, x0:x1, :3] = _after_hl.astype(np.uint8)
-            result[y0:y1, x0:x1, 3][_hl_on_iris] = 255
+        # 안광은 스탬프 에디터에서 처리 — 여기서 직접 렌더링하지 않음
 
     return result
 
 
 def adjust_highlight(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
-    """안광 텍스처에 features.json 기반 하이라이트 렌더링."""
+    """안광 텍스처 — 하이라이트는 proposed_stamps.json으로 내보내 웹 에디터에서 스탬프로 처리."""
+    return texture_bgra
+
+
+def _adjust_highlight_direct(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
+    """(내부 참조용) 안광 텍스처에 features.json 기반 하이라이트 렌더링."""
     pupil = features.get("pupil", {})
     highlights = pupil.get("highlights", [])
 
@@ -665,6 +635,97 @@ def adjust_highlight(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
     return result
 
 
+def compute_proposed_stamps(features: dict, lm: list, img_w: int = 1024, img_h: int = 1024) -> dict:
+    """markings·highlights를 UV 0-1 좌표 스탬프 JSON으로 변환.
+    반환: { "BaseTexture_Generate_Face": [...], "BaseTexture_Generate_Pupil": [...] }
+    """
+    stamps: dict = {
+        "BaseTexture_Generate_Face": [],
+        "BaseTexture_Generate_Pupil": [],
+    }
+
+    # ── Face markings ────────────────────────────────────────────────────────────
+    face = features.get("face", {})
+    markings = face.get("markings", []) or []
+    if lm and markings:
+        _type_shape = {
+            "mole": "circle", "star": "star", "teardrop": "oval",
+            "triangle": "diamond", "diamond": "diamond",
+        }
+        _size_frac = {"tiny": 0.005, "small": 0.008, "medium": 0.012, "large": 0.018}
+
+        uv_map = {}
+        for m in markings:
+            uv_x, uv_y = marking_to_uv_coords(m, lm, img_w, img_h)
+            uv_map[id(m)] = (uv_x, uv_y)
+
+        # left/right 쌍 Y 평균화 (adjust_texture.py add_markings와 동일 로직)
+        ref_groups: dict = {}
+        for m in markings:
+            ref  = m.get("reference", "")
+            side = m.get("side", "center")
+            if side in ("left", "right"):
+                ref_groups.setdefault(ref, {})[side] = m
+        for _, sides in ref_groups.items():
+            if "left" in sides and "right" in sides:
+                ly = uv_map[id(sides["left"])][1]
+                ry = uv_map[id(sides["right"])][1]
+                avg_y = (ly + ry) / 2
+                uv_map[id(sides["left"])]  = (uv_map[id(sides["left"])][0],  avg_y)
+                uv_map[id(sides["right"])] = (uv_map[id(sides["right"])][0], avg_y)
+
+        for m in markings:
+            uv_x, uv_y = uv_map[id(m)]
+            color_rgb = m.get("color", [40, 20, 20])
+            color_hex = "#{:02x}{:02x}{:02x}".format(
+                max(0, min(255, int(color_rgb[0]))),
+                max(0, min(255, int(color_rgb[1]))),
+                max(0, min(255, int(color_rgb[2]))),
+            )
+            stamps["BaseTexture_Generate_Face"].append({
+                "shape":    _type_shape.get(m.get("type", "other"), "circle"),
+                "x":        round(float(uv_x), 4),
+                "y":        round(float(uv_y), 4),
+                "size":     _size_frac.get(m.get("size", "tiny"), 0.012),
+                "color":    color_hex,
+                "opacity":  1.0,
+                "rotation": 0,
+            })
+
+    # ── Eye highlights (Pupil 눈동자 텍스처에 스탬프로 추가) ─────────────────────
+    pupil = features.get("pupil", {})
+    highlights = pupil.get("highlights", []) or []
+    EYE_CX = [0.2515, 0.7476]
+    EYE_CY = 0.5078
+    EYE_RX = 0.1079
+    EYE_RY = 0.2441
+    TEX_W  = 1024
+
+    for hl in highlights:
+        nx         = float(hl.get("nx", 0.0))
+        ny         = float(hl.get("ny", 0.0))
+        size_ratio = float(hl.get("size_ratio", 0.01))
+        shape_raw  = hl.get("shape", "circle")
+        shape      = "oval" if shape_raw == "oval" else "circle"
+        brightness = float(hl.get("brightness", 0.9))
+
+        erx_px = EYE_RX * TEX_W
+        hr_frac = max(0.015, erx_px * (size_ratio ** 0.5) * 2.0 / TEX_W)
+
+        for ecx in EYE_CX:
+            stamps["BaseTexture_Generate_Pupil"].append({
+                "shape":    shape,
+                "x":        round(ecx + nx * EYE_RX, 4),
+                "y":        round(EYE_CY + ny * EYE_RY, 4),
+                "size":     round(hr_frac, 4),
+                "color":    "#ffffff",
+                "opacity":  round(brightness, 2),
+                "rotation": 0,
+            })
+
+    return stamps
+
+
 def process(input_dir: str, output_dir: str, features: dict):
     os.makedirs(output_dir, exist_ok=True)
 
@@ -681,10 +742,11 @@ def process(input_dir: str, output_dir: str, features: dict):
         print("landmarks.json 없음 — blush/marking 적용 스킵\n")
 
     generate_targets = [
-        ("BaseTexture_Generate_Face.png",      adjust_face,      "Face 피부톤 + 볼터치 + 점"),
-        ("BaseTexture_Generate_Eyebrow.png",   adjust_eyebrow,   "Eyebrow 눈썹"),
-        ("BaseTexture_Generate_Pupil.png",     adjust_pupil,     "Pupil 눈동자"),
-        ("BaseTexture_Static_EyeHighlight.png", adjust_highlight, "EyeHighlight 안광"),
+        ("BaseTexture_Generate_Face.png",    adjust_face,    "Face 피부톤 + 볼터치"),
+        ("BaseTexture_Generate_Eyebrow.png", adjust_eyebrow, "Eyebrow 눈썹"),
+        ("BaseTexture_Generate_Pupil.png",   adjust_pupil,   "Pupil 눈동자"),
+        # BaseTexture_Static_EyeHighlight 는 파이프라인에서 건드리지 않음
+        # → VRM 원본 안광 텍스처 유지, AI 안광은 스탬프(Pupil 슬롯)로만 적용
     ]
 
     static_targets = [
@@ -740,6 +802,14 @@ def process(input_dir: str, output_dir: str, features: dict):
         print(f"  복사: {eyeline_dst}\n")
     else:
         print(f"  건너뜀: eyeline 베이스 없음 ({eyeline_src})\n")
+
+    # ── proposed_stamps.json (markings + highlights → 웹 스탬프 에디터용) ────────
+    proposed_stamps = compute_proposed_stamps(features, lm)
+    stamps_path = os.path.join(output_dir, "proposed_stamps.json")
+    with open(stamps_path, "w", encoding="utf-8") as f:
+        json.dump(proposed_stamps, f, ensure_ascii=False, indent=2)
+    total = sum(len(v) for v in proposed_stamps.values())
+    print(f"\n제안 스탬프: {total}개 → {stamps_path}")
 
     print(f"완료. 결과 폴더: {output_dir}")
 

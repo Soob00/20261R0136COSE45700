@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { EditorState, EditorActions, AvatarVersion, MaterialSlot, HairRecommendation } from '@/types/editor';
+import type { EditorState, EditorActions, AvatarVersion, MaterialSlot, HairRecommendation, ProposedStampItem } from '@/types/editor';
 
 // --- Undo/Redo History ---
 
@@ -81,6 +81,7 @@ const initialState: EditorState = {
   versions: [],
   isLoading: false,
   error: null,
+  proposedStamps: null,
 };
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -275,6 +276,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return { materials: updated };
     });
   },
+
+  setProposedStamps: (stamps) => set({ proposedStamps: stamps }),
+
+  setSlotTextureUrl: (slotId, url) => set((state) => ({
+    materials: {
+      ...state.materials,
+      [slotId]: { ...(state.materials[slotId] ?? { name: slotId }), textureUrl: url },
+    },
+  })),
 
   // --- Reset All ---
   resetAll: () => {

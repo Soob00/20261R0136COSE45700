@@ -65,6 +65,17 @@ export interface HairMatchResult {
   reason: string;
 }
 
+/** Stamp data from Python pipeline — UV 0-1 coords, keyed by texture slot ID */
+export interface ProposedStamp {
+  shape: 'circle' | 'oval' | 'star' | 'heart' | 'diamond';
+  x: number;       // 0-1 normalised (left→right)
+  y: number;       // 0-1 normalised (top→bottom)
+  size: number;    // radius as fraction of texture width
+  color: string;   // hex e.g. "#ffffff"
+  opacity: number; // 0-1
+  rotation: number;
+}
+
 /** Texture pipeline response — base64-encoded texture images keyed by slot name */
 export interface TextureResult {
   textures: Record<string, string>; // slotName → base64 data URL
@@ -72,6 +83,8 @@ export interface TextureResult {
   features?: unknown;
   hairMatch?: HairMatchResult | null;
   faceKeys?: PipelineResult | null;
+  /** Markings + highlights as editable stamps, keyed by texture slot ID */
+  proposedStamps?: Record<string, ProposedStamp[]> | null;
 }
 
 /** Full pipeline response (run_pipeline output) */

@@ -515,10 +515,66 @@ Rules:
 """
 
     import time
+
+    def _default_features() -> dict:
+        """Gemini API 불가 시 기본값 반환 (텍스처 파이프라인은 계속 진행)."""
+        print("  [경고] Gemini API 사용 불가 — 기본 특징값으로 대체합니다.")
+        return {
+            "face": {
+                "skin_tone": [240, 210, 190],
+                "skin_shading_intensity": 0.2,
+                "blush_present": False,
+                "blush_color": [220, 130, 130],
+                "blush_opacity": 0.0,
+                "blush_position": "cheek_center",
+                "markings": [],
+            },
+            "eyebrow": {
+                "color": [80, 60, 50],
+                "shape": "arch",
+                "thickness": "medium",
+                "opacity": 1.0,
+                "has_gradient": False,
+            },
+            "eyeline": {
+                "eyeline_type": "simple",
+                "eyeliner_color": [30, 20, 20],
+                "eyeliner_thickness": "medium",
+                "has_eyelid_crease": False,
+                "eyelid_crease_depth": "shallow",
+                "eyelid_crease_color": [200, 170, 170],
+                "lash_intensity": "medium",
+                "eyeshadow_present": False,
+                "eyeshadow_color": [0, 0, 0],
+                "eyeshadow_opacity": 0.0,
+                "eyeshadow_position": "lid_only",
+            },
+            "pupil": {
+                "iris_top_color": [100, 100, 160],
+                "iris_bottom_color": [120, 140, 200],
+                "iris_left_color": [110, 120, 180],
+                "iris_right_color": [110, 120, 180],
+                "iris_center_color": [100, 110, 165],
+                "pupil_color": [20, 20, 20],
+                "pupil_size_ratio": 0.3,
+                "top_shadow_ratio": 0.3,
+                "highlights": [],
+            },
+            "general": {
+                "hair_color": [120, 90, 70],
+                "hair_style": "other",
+                "hair_length": "medium",
+                "bangs_style": "none",
+                "overall_style": "cute",
+            },
+            "_gemini_fallback": True,
+        }
+
     max_retries = 5
+    gemini_response = None
     for attempt in range(max_retries):
         try:
-            response = client.models.generate_content(
+            gemini_response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
@@ -527,6 +583,11 @@ Rules:
             )
             break
         except Exception as e:
+            err_str = str(e)
+            # 크레딧 소진 / 결제 오류는 재시도해도 해결 불가 → 즉시 fallback
+            if "RESOURCE_EXHAUSTED" in err_str or "prepayment credits" in err_str or "429" in err_str:
+                print(f"  [오류] Gemini API 크레딧 부족 (429 RESOURCE_EXHAUSTED) — 기본값 사용.")
+                return _default_features()
             if attempt < max_retries - 1:
                 wait = 15 * (attempt + 1)  # 15, 30, 45, 60초
                 print(f"  API 오류 (시도 {attempt+1}/{max_retries}): {e}")
@@ -535,7 +596,7 @@ Rules:
             else:
                 raise
 
-    raw = response.text.strip()
+    raw = gemini_response.text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):

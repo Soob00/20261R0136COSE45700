@@ -6,6 +6,7 @@ import { WebGLCheck } from '@/components/viewer/WebGLCheck';
 import { MorphTargetSlider } from '@/components/editor/MorphTargetSlider';
 import { CollapsibleSection } from '@/components/editor/CollapsibleSection';
 import { MaterialEditor } from '@/components/editor/MaterialEditor';
+import { TextureStampEditor } from '@/components/editor/TextureStampEditor';
 import { VersionPanel } from '@/components/editor/VersionPanel';
 import { TemplateSelector } from '@/components/editor/TemplateSelector';
 import { PresetGrid } from '@/components/editor/PresetGrid';
@@ -39,6 +40,7 @@ import {
   Redo2,
   Sparkles,
   Box,
+  Layers2,
 } from 'lucide-react';
 import type { ThreeJSViewerHandle } from '@/components/viewer/ThreeJSViewer';
 
@@ -135,14 +137,15 @@ const MORPH_RANGES: Record<string, { min: number; max: number }> = {
 };
 
 
-type TabId = 'face' | 'expressions' | 'material' | 'style' | 'version';
+type TabId = 'face' | 'expressions' | 'material' | 'style' | 'version' | 'texture';
 
 const TAB_CONFIG: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: 'face', label: '얼굴', icon: User },
-  { id: 'style', label: '스타일', icon: Shirt },
-  { id: 'material', label: '재질', icon: Palette },
-  { id: 'expressions', label: '표정', icon: Smile },
-  { id: 'version', label: '버전', icon: History },
+  { id: 'face',        label: '얼굴',   icon: User    },
+  { id: 'style',       label: '스타일', icon: Shirt   },
+  { id: 'material',    label: '재질',   icon: Palette },
+  { id: 'texture',     label: '텍스처', icon: Layers2 },
+  { id: 'expressions', label: '표정',   icon: Smile   },
+  { id: 'version',     label: '버전',   icon: History },
 ];
 
 export default function DevViewerPage() {
@@ -613,6 +616,11 @@ export default function DevViewerPage() {
               {activeTab === 'material' && (
                 <MaterialEditor detectedMaterials={detectedMaterials} />
               )}
+
+              {/* Texture Stamp Tab — always mounted to preserve stamp state across tab switches */}
+              <div className={activeTab !== 'texture' ? 'hidden' : undefined}>
+                <TextureStampEditor isActive={activeTab === 'texture'} />
+              </div>
 
               {/* Style Tab */}
               {activeTab === 'style' && (

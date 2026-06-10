@@ -83,6 +83,20 @@ export interface EditorState {
   // UI state
   isLoading: boolean;
   error: string | null;
+
+  // Stamps proposed by the texture pipeline (markings + highlights)
+  // keyed by texture slot ID; cleared once consumed by TextureStampEditor
+  proposedStamps: Record<string, ProposedStampItem[]> | null;
+}
+
+export interface ProposedStampItem {
+  shape: 'circle' | 'oval' | 'star' | 'heart' | 'diamond';
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  opacity: number;
+  rotation: number;
 }
 
 export interface EditorActions {
@@ -122,6 +136,9 @@ export interface EditorActions {
   // Pipeline
   applyPipelineResult: (params: Record<string, number>) => void;
   applyTextureResult: (textures: Record<string, string>) => void;
+  setProposedStamps: (stamps: Record<string, ProposedStampItem[]> | null) => void;
+  /** Update a single slot's textureUrl without undo — used by stamp editor after render */
+  setSlotTextureUrl: (slotId: string, url: string) => void;
 
   // Reset all
   resetAll: () => void;
