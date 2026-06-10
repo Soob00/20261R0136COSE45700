@@ -72,9 +72,9 @@ def sample_iris_colors(image_path: str, landmarks_path: str) -> dict:
         avg = np.mean(saturated if len(saturated) > 0 else arr, axis=0)
         return [int(avg[0]), int(avg[1]), int(avg[2])]
 
-    def sample_center(img_rgb, cx, cy, rx, ry, r_max=0.15):
-        """동공 중심 색상 — 좁은 반경(r<0.15)에서 MEDIAN 사용.
-        r_max를 0.15로 제한해 하이라이트가 집중된 중간 영역(r=0.15~0.30) 오염 방지.
+    def sample_center(img_rgb, cx, cy, rx, ry, r_max=0.08):
+        """동공 중심 색상 — 좁은 반경(r<0.08)에서 MEDIAN 사용.
+        r_max를 0.08로 제한해 동공 중심부만 샘플링, 홍채 픽셀 혼입 최소화.
         채도 상위 선택 대신 MEDIAN으로 밝은 반사광 픽셀에 끌려가지 않게 함."""
         h, w = img_rgb.shape[:2]
         pixels = []
@@ -208,53 +208,85 @@ def extract_eye_highlights(image_path: str, landmarks_path: str) -> list:
     ]
 
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    collected = []
 
-    for eye in eyes:
+    IRIS_SCALE = 0.60
+    MIN_CIRC   = 0.3   # 선형 반사광 제거: 원형도 하한
+    MAX_ASPECT = 3.0   # 장단축비 상한 (가늘고 긴 형태 제거)
+
+    def _detect_one_eye(eye):
         cx, cy, rx, ry = eye["cx"], eye["cy"], eye["rx"], eye["ry"]
         if rx < 4 or ry < 4:
-            continue
+            return []
 
-        eye_mask = np.zeros((h_img, w_img), dtype=np.uint8)
-        cv2.ellipse(eye_mask, (cx, cy), (rx, ry), 0, 0, 360, 255, -1)
+        iris_rx = max(1, int(rx * IRIS_SCALE))
+        iris_ry = max(1, int(ry * IRIS_SCALE))
 
-        # 안광: 채도 낮고 매우 밝은 픽셀 (S<40, V>210)
-        bright = (hsv_img[:, :, 1] < 40) & (hsv_img[:, :, 2] > 210) & (eye_mask > 0)
+        iris_mask = np.zeros((h_img, w_img), dtype=np.uint8)
+        cv2.ellipse(iris_mask, (cx, cy), (iris_rx, iris_ry), 0, 0, 360, 255, -1)
+
+        bright    = (hsv_img[:, :, 1] < 20) & (hsv_img[:, :, 2] > 235) & (iris_mask > 0)
         bright_u8 = bright.astype(np.uint8) * 255
-
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        kernel    = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         bright_u8 = cv2.morphologyEx(bright_u8, cv2.MORPH_OPEN, kernel)
 
         contours, _ = cv2.findContours(bright_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        iris_area = np.pi * rx * ry
+        iris_area    = np.pi * iris_rx * iris_ry
 
+        results = []
         for cnt in contours:
             area = cv2.contourArea(cnt)
             if area < 3:
                 continue
+
+            perimeter    = cv2.arcLength(cnt, True)
+            circularity  = 4 * np.pi * area / (perimeter ** 2 + 1e-6)
+            if circularity < MIN_CIRC:          # 선형 반사광 제거
+                continue
+
+            # 장단축비 필터 — fitEllipse 또는 boundingRect 사용
+            try:
+                if len(cnt) >= 5:
+                    _, (w_el, h_el), _ = cv2.fitEllipse(cnt)
+                    aspect = max(w_el, h_el) / (min(w_el, h_el) + 1e-6)
+                else:
+                    _, _, w_r, h_r = cv2.boundingRect(cnt)
+                    aspect = max(w_r, h_r) / (min(w_r, h_r) + 1e-6)
+            except Exception:
+                _, _, w_r, h_r = cv2.boundingRect(cnt)
+                aspect = max(w_r, h_r) / (min(w_r, h_r) + 1e-6)
+            if aspect > MAX_ASPECT:
+                continue
+
             M = cv2.moments(cnt)
             if M["m00"] == 0:
                 continue
             hx = M["m10"] / M["m00"]
             hy = M["m01"] / M["m00"]
-            nx = (hx - cx) / rx
-            ny = (hy - cy) / ry
-            if nx**2 + ny**2 > 1.0:
+            nx = (hx - cx) / iris_rx
+            ny = (hy - cy) / iris_ry
+            if nx ** 2 + ny ** 2 > 1.0:
                 continue
-            perimeter = cv2.arcLength(cnt, True)
-            circularity = 4 * np.pi * area / (perimeter ** 2 + 1e-6)
+
             shape = "circle" if circularity > 0.7 else "oval" if circularity > 0.4 else "star"
-            collected.append({
-                "nx": float(nx),
-                "ny": float(ny),
+
+            _cnt_mask = np.zeros((h_img, w_img), dtype=np.uint8)
+            cv2.drawContours(_cnt_mask, [cnt], -1, 255, -1)
+            _v_vals    = hsv_img[:, :, 2][_cnt_mask > 0]
+            brightness = float(np.clip((np.mean(_v_vals) - 235.0) / 20.0, 0.0, 1.0)) if len(_v_vals) > 0 else 1.0
+
+            results.append({
+                "nx":         float(nx),
+                "ny":         float(ny),
                 "size_ratio": float(area / iris_area),
-                "shape": shape,
+                "shape":      shape,
+                "brightness": brightness,
             })
 
-    if not collected:
-        return []
+        results.sort(key=lambda x: x["size_ratio"], reverse=True)
+        return results[:4]
 
-    # 크기 순 정렬 후 상위 4개 (노이즈 제거)
+    # 두 눈 독립 처리 후 합산 → 크기 순 상위 4개
+    collected = _detect_one_eye(eyes[0]) + _detect_one_eye(eyes[1])
     collected.sort(key=lambda x: x["size_ratio"], reverse=True)
     return collected[:4]
 

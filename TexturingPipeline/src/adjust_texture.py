@@ -436,13 +436,14 @@ def adjust_pupil(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
         R  = np.sqrt(NX**2 + NY**2)
         in_iris = (R <= 1.0) & (alpha[y0:y1, x0:x1] > 0)
 
-        # 5방향 가중치
-        wt   = np.maximum(0.0, -NY)
-        wb   = np.maximum(0.0,  NY)
-        wl   = np.maximum(0.0, -NX)
-        wr   = np.maximum(0.0,  NX)
-        wc   = np.maximum(0.0, 1.0 - (np.abs(NX) + np.abs(NY)))
-        wtot = wt + wb + wl + wr + wc + 1e-6
+        # 5방향 가중치 — 코사인 기반 (축 방향 기울기 불연속 → 십자 아티팩트 제거)
+        theta = np.arctan2(NY, NX)
+        wt    = np.maximum(0.0, -np.sin(theta))   # 상단 (-NY 방향)
+        wb    = np.maximum(0.0,  np.sin(theta))    # 하단 (+NY 방향)
+        wl    = np.maximum(0.0, -np.cos(theta))    # 좌측 (-NX 방향)
+        wr    = np.maximum(0.0,  np.cos(theta))    # 우측 (+NX 방향)
+        wc    = np.maximum(0.0,  1.0 - R)          # 중심 (원형 반경 기반)
+        wtot  = wt + wb + wl + wr + wc + 1e-6
         weights = [wt, wb, wl, wr, wc]
 
         # 위치별 타겟 BGR (5방향 가중 보간) → LAB 변환
@@ -510,12 +511,9 @@ def adjust_pupil(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
         eff_L       = np.maximum(tgt_L_grad, L_MIN_LOWER)
         new_L_iris  = np.clip(eff_L * (L_FLOOR + orig_L_norm * (1.0 - L_FLOOR)), 0, 255)
 
-        # 내측(동공): iris_center V / iris 평균 V 비율로 L_FLOOR_INNER 동적 결정
-        v_center    = float(np.max(tgt_bgr_dirs["center"]))
-        v_iris_mean = float(np.mean([np.max(tgt_bgr_dirs[d])
-                                     for d in ["top", "bottom", "left", "right"]]))
-        pupil_v_ratio = v_center / max(v_iris_mean, 1.0)
-        L_FLOOR_INNER = float(np.clip(0.80 * pupil_v_ratio, 0.30, 0.90))
+        # 내측(동공): iris_center_color V를 L_FLOOR_INNER로 직접 사용
+        v_center      = float(np.max(tgt_bgr_dirs["center"]))
+        L_FLOOR_INNER = float(np.clip(v_center / 255.0 * 0.85, 0.0, 0.90))
 
         new_L_inner = np.clip(
             tgt_lab[:, :, 0] * (L_FLOOR_INNER + orig_L_norm * (1.0 - L_FLOOR_INNER)), 0, 255
@@ -555,6 +553,70 @@ def adjust_pupil(texture_bgra: np.ndarray, features: dict) -> np.ndarray:
         result[y0:y1, x0:x1, :3] = cv2.cvtColor(
             ring_hsv.astype(np.uint8), cv2.COLOR_HSV2BGR
         )
+
+        # ── 동공 색상 적용 ────────────────────────────────────────────────────
+        # 홍채 보정·링 처리 후 동공 영역에 pupil_color 색상·어둡기를 별도 적용.
+        # blend_iris(0=동공, 1=홍채)를 반전한 pupil_mask로 smooth 블렌딩.
+        _pupil_rgb = pupil.get("iris_center_color", [130, 100, 160])
+        _p_bgr     = np.uint8([[[_pupil_rgb[2], _pupil_rgb[1], _pupil_rgb[0]]]])
+        _p_lab     = cv2.cvtColor(_p_bgr, cv2.COLOR_BGR2LAB)[0][0].astype(np.float32)
+
+        pupil_mask = 1.0 - blend_iris          # 1=동공 중심, 0=홍채 외측
+        _p_L = np.clip(
+            _p_lab[0] * (L_FLOOR_INNER + orig_L_norm * (1.0 - L_FLOOR_INNER)), 0, 255
+        )
+
+        _after_p    = result[y0:y1, x0:x1, :3].astype(np.uint8)
+        _after_plab = cv2.cvtColor(_after_p, cv2.COLOR_BGR2LAB).astype(np.float32)
+        _pm         = pupil_mask
+
+        _new_plab = _after_plab.copy()
+        _new_plab[:, :, 0] = np.where(in_iris,
+            _after_plab[:, :, 0] * (1 - _pm) + _p_L          * _pm, _after_plab[:, :, 0])
+        _new_plab[:, :, 1] = np.where(in_iris,
+            _after_plab[:, :, 1] * (1 - _pm) + _p_lab[1]     * _pm, _after_plab[:, :, 1])
+        _new_plab[:, :, 2] = np.where(in_iris,
+            _after_plab[:, :, 2] * (1 - _pm) + _p_lab[2]     * _pm, _after_plab[:, :, 2])
+
+        result[y0:y1, x0:x1, :3] = cv2.cvtColor(
+            np.clip(_new_plab, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR
+        )
+
+        # ── 안광 (features.json highlights → Pupil 텍스처에 렌더링) ─────────────
+        # input 이미지에서 추출된 nx, ny를 텍스처 홍채 좌표계로 매핑하여 합성.
+        _iris_area_tex = np.pi * rx * ry
+        for _hl in pupil.get("highlights", []):
+            _hnx        = float(_hl.get("nx", 0.0))
+            _hny        = float(_hl.get("ny", 0.0))
+            _size_ratio = float(_hl.get("size_ratio", 0.01))
+            _hshape     = _hl.get("shape", "oval")
+
+            if _hnx**2 + _hny**2 > 1.0:
+                continue
+
+            # 텍스처 좌표 → crop 좌표계
+            _hx_c = int(cx + _hnx * rx) - x0
+            _hy_c = int(cy + _hny * ry) - y0
+            _hr   = max(2, int(np.sqrt(_size_ratio * _iris_area_tex / np.pi)))
+
+            _hl_brightness = float(_hl.get("brightness", 1.0))
+
+            _hl_mask = np.zeros(in_iris.shape, dtype=np.uint8)
+            if _hshape == "oval":
+                cv2.ellipse(_hl_mask, (_hx_c, _hy_c),
+                            (_hr, max(2, _hr // 2)), 0, 0, 360, 255, -1)
+            else:
+                cv2.circle(_hl_mask, (_hx_c, _hy_c), _hr, 255, -1)
+
+            # brightness 비율로 흰색 블렌딩 — 덜 밝은 안광은 눈동자 색이 비침
+            _hl_on_iris = (_hl_mask > 0) & in_iris
+            _after_hl   = result[y0:y1, x0:x1, :3].astype(np.float32)
+            _after_hl[_hl_on_iris] = np.clip(
+                _after_hl[_hl_on_iris] * (1.0 - _hl_brightness) + 255.0 * _hl_brightness,
+                0, 255
+            )
+            result[y0:y1, x0:x1, :3] = _after_hl.astype(np.uint8)
+            result[y0:y1, x0:x1, 3][_hl_on_iris] = 255
 
     return result
 
