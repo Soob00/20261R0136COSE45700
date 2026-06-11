@@ -44,8 +44,9 @@ export function MorphTargetSlider({ name, label, min = 0, max = 1 }: MorphTarget
           {isModified && (
             <button
               onClick={handleReset}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-accent"
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 -m-1 rounded-md hover:bg-accent"
               title="초기화"
+              aria-label={`${label || name} 초기화`}
             >
               <RotateCcw className="w-3 h-3 text-muted-foreground" />
             </button>

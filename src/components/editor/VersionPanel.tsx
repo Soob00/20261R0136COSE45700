@@ -17,6 +17,7 @@ export function VersionPanel({ onCaptureScreenshot }: VersionPanelProps) {
   const [editName, setEditName] = useState('');
   const [compareId, setCompareId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
@@ -102,7 +103,9 @@ export function VersionPanel({ onCaptureScreenshot }: VersionPanelProps) {
                 <div className="flex-1 min-w-0">
                   {editingId === version.id ? (
                     <div className="flex items-center gap-1">
+                      <label htmlFor={`rename-${version.id}`} className="sr-only">버전 이름 변경</label>
                       <input
+                        id={`rename-${version.id}`}
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
@@ -110,13 +113,13 @@ export function VersionPanel({ onCaptureScreenshot }: VersionPanelProps) {
                           if (e.key === 'Enter') handleConfirmRename();
                           if (e.key === 'Escape') handleCancelRename();
                         }}
-                        className="flex-1 px-1.5 py-0.5 text-xs bg-background border border-border rounded text-foreground"
+                        className="flex-1 px-2 py-1 text-xs bg-background border border-border rounded-md text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         autoFocus
                       />
-                      <button onClick={handleConfirmRename} className="p-0.5 text-primary hover:text-primary/80">
+                      <button onClick={handleConfirmRename} className="p-1.5 text-primary hover:text-primary/80 hover:bg-primary/10 rounded-md transition-colors" aria-label="이름 변경 확인">
                         <Check className="w-3 h-3" />
                       </button>
-                      <button onClick={handleCancelRename} className="p-0.5 text-muted-foreground hover:text-foreground">
+                      <button onClick={handleCancelRename} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors" aria-label="이름 변경 취소">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -136,37 +139,57 @@ export function VersionPanel({ onCaptureScreenshot }: VersionPanelProps) {
                   <div className="flex gap-1 mt-1.5">
                     <button
                       onClick={() => restoreVersion(version.id)}
-                      className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] bg-secondary text-secondary-foreground rounded hover:bg-secondary/80 transition-colors"
-                      title="이 버전으로 복원"
+                      className="flex items-center gap-1 px-2 py-1 text-[10px] bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors"
+                      aria-label={`${version.name} 버전으로 복원`}
                     >
                       <RotateCcw className="w-2.5 h-2.5" />
                       복원
                     </button>
                     <button
                       onClick={() => setCompareId(compareId === version.id ? null : version.id)}
-                      className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+                      className={`px-2 py-1 text-[10px] rounded-md transition-colors ${
                         compareId === version.id
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                       }`}
-                      title="비교용으로 선택"
+                      aria-label={`${version.name} 비교`}
                     >
                       비교
                     </button>
                     <button
                       onClick={() => handleStartRename(version.id, version.name)}
-                      className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                      title="이름 변경"
+                      className="p-1.5 -m-0.5 text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+                      aria-label={`${version.name} 이름 변경`}
                     >
-                      <Pencil className="w-2.5 h-2.5" />
+                      <Pencil className="w-3 h-3" />
                     </button>
-                    <button
-                      onClick={() => syncDeleteVersion(version.id)}
-                      className="p-0.5 text-muted-foreground hover:text-destructive transition-colors"
-                      title="삭제"
-                    >
-                      <Trash2 className="w-2.5 h-2.5" />
-                    </button>
+                    {deleteConfirmId === version.id ? (
+                      <div className="flex items-center gap-0.5 ml-auto">
+                        <span className="text-[10px] text-destructive font-medium">삭제?</span>
+                        <button
+                          onClick={() => { syncDeleteVersion(version.id); setDeleteConfirmId(null); }}
+                          className="p-1.5 text-destructive hover:bg-destructive/15 rounded-md transition-colors"
+                          aria-label={`${version.name} 삭제 확인`}
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+                          aria-label="삭제 취소"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDeleteConfirmId(version.id)}
+                        className="p-1.5 -m-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                        aria-label={`${version.name} 삭제`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
