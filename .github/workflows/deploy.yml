@@ -1,0 +1,65 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - deploy
+  workflow_dispatch:
+
+concurrency:
+  group: ec2-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VARCO_API_KEY: ${{ secrets.VARCO_API_KEY }}
+        with:
+          host: ${{ vars.EC2_HOST }}
+          port: ${{ vars.EC2_PORT || 22 }}
+          username: ${{ vars.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY || vars.EC2_SSH_KEY }}
+          timeout: 30s
+          command_timeout: 15m
+          envs: DATABASE_URL,GEMINI_API_KEY,VARCO_API_KEY
+          script: |
+            set -euo pipefail
+
+            APP_DIR=/opt/virtual-avatar/current
+            ENV_FILE=/etc/virtual-avatar/env
+
+            cd "$APP_DIR"
+            git fetch origin deploy
+            git checkout deploy
+            git reset --hard origin/deploy
+
+            sudo install -d -m 0755 /etc/virtual-avatar
+            {
+              echo "NODE_ENV=production"
+              echo "PORT=3000"
+              echo "HOSTNAME=0.0.0.0"
+              echo "NEXT_PUBLIC_API_MODE=local"
+              echo "PIPELINE_PYTHON=/opt/virtual-avatar/venv/bin/python"
+              echo "ADF_SERVER_URL=http://127.0.0.1:8000"
+              if [ -n "${DATABASE_URL:-}" ]; then echo "DATABASE_URL=$DATABASE_URL"; fi
+              if [ -n "${GEMINI_API_KEY:-}" ]; then echo "GEMINI_API_KEY=$GEMINI_API_KEY"; fi
+              if [ -n "${VARCO_API_KEY:-}" ]; then echo "VARCO_API_KEY=$VARCO_API_KEY"; fi
+            } | sudo tee "$ENV_FILE" >/dev/null
+            sudo chmod 0600 "$ENV_FILE"
+
+            sudo systemctl stop virtual-avatar || true
+
+            rm -rf .next
+            npm ci
+            npm run build
+
+            sudo systemctl restart virtual-avatar
+            sudo systemctl --no-pager --full status virtual-avatar
