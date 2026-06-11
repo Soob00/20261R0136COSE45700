@@ -60,7 +60,7 @@ jobs:
 
             rm -rf .next
             npm ci
-            npm run build
+            NEXT_PUBLIC_ASSET_BASE_URL=http://ku-hys-03-s3.s3-website-us-east-1.amazonaws.com npm run build
 
             sudo systemctl restart virtual-avatar
             sudo systemctl --no-pager --full status virtual-avatar
