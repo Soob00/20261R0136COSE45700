@@ -49,7 +49,7 @@ const ThreeJSViewer = dynamic(
   { ssr: false }
 );
 
-const DEFAULT_MODEL_URL = '/models/CustomizableCharacter.vrm';
+const DEFAULT_MODEL_URL = (process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? '').replace(/\/$/, '') + '/models/CustomizableCharacter.vrm';
 
 
 const MORPH_LABELS: Record<string, string> = {

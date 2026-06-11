@@ -1,12 +1,13 @@
 import type { TemplateMetadata } from '@/types/template';
+import { assetUrl } from '@/lib/assetUrl';
 
 export const TEMPLATES: TemplateMetadata[] = [
   {
     id: 'customizable-default',
     name: 'Default',
     description: '기본 커스터마이징 캐릭터',
-    thumbnailUrl: '/models/CustomizableCharacter.vrm',
-    vrmUrl: '/models/CustomizableCharacter.vrm',
+    thumbnailUrl: assetUrl('/models/CustomizableCharacter.vrm'),
+    vrmUrl: assetUrl('/models/CustomizableCharacter.vrm'),
     tags: ['default', 'basic'],
   },
   // 추후 템플릿팀 에셋 도착 시 추가
