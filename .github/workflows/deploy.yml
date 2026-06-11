@@ -49,6 +49,7 @@ jobs:
               echo "NEXT_PUBLIC_API_MODE=local"
               echo "PIPELINE_PYTHON=/opt/virtual-avatar/venv/bin/python"
               echo "ADF_SERVER_URL=http://127.0.0.1:8000"
+              echo "NEXT_PUBLIC_ASSET_BASE_URL=http://ku-hys-03-s3.s3-website-us-east-1.amazonaws.com/public"
               if [ -n "${DATABASE_URL:-}" ]; then echo "DATABASE_URL=$DATABASE_URL"; fi
               if [ -n "${GEMINI_API_KEY:-}" ]; then echo "GEMINI_API_KEY=$GEMINI_API_KEY"; fi
               if [ -n "${VARCO_API_KEY:-}" ]; then echo "VARCO_API_KEY=$VARCO_API_KEY"; fi
@@ -59,7 +60,7 @@ jobs:
 
             rm -rf .next
             npm ci
-            npm run build
+            NEXT_PUBLIC_ASSET_BASE_URL=http://ku-hys-03-s3.s3-website-us-east-1.amazonaws.com npm run build
 
             sudo systemctl restart virtual-avatar
             sudo systemctl --no-pager --full status virtual-avatar

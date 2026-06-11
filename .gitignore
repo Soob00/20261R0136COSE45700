@@ -42,9 +42,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# VRM models (large binaries)
-public/models/*.vrm
-public/models/*.blend
+# Model assets (served from S3/CloudFront)
+public/models/
 
 # Python cache
 __pycache__/
@@ -53,9 +52,6 @@ __pycache__/
 # Large model checkpoints
 *.pth.tar
 *.pth
-
-# Hair GLB models (large binaries)
-public/models/hair/
 
 # Tool/IDE config
 .claude/
