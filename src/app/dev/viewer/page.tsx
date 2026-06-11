@@ -189,12 +189,14 @@ export default function DevViewerPage() {
   }, [loadVersionsFromServer]);
 
   const resetAll = useEditorStore((s) => s.resetAll);
+  const resetMorphTargets = useEditorStore((s) => s.resetMorphTargets);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
   const canUndo = useEditorStore((s) => s.canUndo);
   const canRedo = useEditorStore((s) => s.canRedo);
   const saveVersion = useEditorStore((s) => s.saveVersion);
   const morphTargets = useEditorStore((s) => s.morphTargets);
+  const baselineMorphTargets = useEditorStore((s) => s.baselineMorphTargets);
   const setHairRecommendation = useEditorStore((s) => s.setHairRecommendation);
   const viewerRef = useRef<ThreeJSViewerHandle>(null);
   const { capture } = useCanvasScreenshot();
@@ -502,11 +504,13 @@ export default function DevViewerPage() {
                   modifiedCount={modifiedMorphCount}
                 />
                 <button
-                  onClick={resetAll}
+                  onClick={resetMorphTargets}
                   className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-accent/50 text-muted-foreground rounded-lg hover:bg-accent hover:text-foreground transition-colors border border-border/30"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  전체 초기화
+                  {Object.keys(baselineMorphTargets).length > 0
+                    ? '레퍼런스 기준으로 초기화'
+                    : '전체 초기화'}
                 </button>
               </div>
             )}

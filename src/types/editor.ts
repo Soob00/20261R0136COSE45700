@@ -84,6 +84,9 @@ export interface EditorState {
   isLoading: boolean;
   error: string | null;
 
+  // Baseline morph targets from pipeline — used as reset target instead of zero
+  baselineMorphTargets: MorphTargetMap;
+
   // Stamps proposed by the texture pipeline (markings + highlights)
   // keyed by texture slot ID; cleared once consumed by TextureStampEditor
   proposedStamps: Record<string, ProposedStampItem[]> | null;

@@ -81,6 +81,7 @@ const initialState: EditorState = {
   versions: [],
   isLoading: false,
   error: null,
+  baselineMorphTargets: {},
   proposedStamps: null,
 };
 
@@ -97,7 +98,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   resetMorphTargets: () => {
     pushUndo(get());
-    set({ morphTargets: {} });
+    const baseline = get().baselineMorphTargets;
+    set({ morphTargets: { ...baseline } });
   },
 
   // --- Bone Scales ---
@@ -262,6 +264,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     pushUndo(get());
     set((state) => ({
       morphTargets: { ...state.morphTargets, ...params },
+      baselineMorphTargets: { ...state.baselineMorphTargets, ...params },
     }));
   },
 
@@ -297,6 +300,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       hairBackUrl: null,
       hairColor: null,
       outfitUrl: null,
+      baselineMorphTargets: {},
     });
   },
 
