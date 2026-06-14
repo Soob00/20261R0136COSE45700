@@ -16,9 +16,9 @@ export interface BoneScaleMap {
 export interface MaterialSlot {
   name: string;
   color?: string;
-  metalness?: number;
-  roughness?: number;
-  opacity?: number;
+  shadingToony?: number;
+  shadingShift?: number;
+  rimLightingMix?: number;
   textureUrl?: string;
 }
 

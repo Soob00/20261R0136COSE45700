@@ -15,27 +15,27 @@ interface MaterialEditorProps {
 function MaterialSlotEditor({ mat }: { mat: DetectedMaterial }) {
   const setMaterial = useEditorStore((s) => s.setMaterial);
   const storedColor = useEditorStore((s) => s.materials[mat.slotName]?.color);
-  const storedMetalness = useEditorStore((s) => s.materials[mat.slotName]?.metalness);
-  const storedRoughness = useEditorStore((s) => s.materials[mat.slotName]?.roughness);
-  const storedOpacity = useEditorStore((s) => s.materials[mat.slotName]?.opacity);
+  const storedShadingToony = useEditorStore((s) => s.materials[mat.slotName]?.shadingToony);
+  const storedShadingShift = useEditorStore((s) => s.materials[mat.slotName]?.shadingShift);
+  const storedRimLightingMix = useEditorStore((s) => s.materials[mat.slotName]?.rimLightingMix);
 
   const color = (storedColor as string) ?? mat.color;
-  const metalness = (storedMetalness as number) ?? mat.metalness;
-  const roughness = (storedRoughness as number) ?? mat.roughness;
-  const opacity = (storedOpacity as number) ?? mat.opacity;
+  const shadingToony = (storedShadingToony as number) ?? mat.shadingToony;
+  const shadingShift = (storedShadingShift as number) ?? mat.shadingShift;
+  const rimLightingMix = (storedRimLightingMix as number) ?? mat.rimLightingMix;
 
   const presets = mat.category === 'skin' ? COLOR_PRESETS.skin
     : mat.category === 'eye' ? COLOR_PRESETS.eye
     : mat.category === 'hair' ? COLOR_PRESETS.hair
     : undefined;
 
-  const handleColorChange = useCallback(
-    (c: string) => {
-      setMaterial(mat.slotName, 'color', c);
-      // Sync linked skin materials (e.g. face + neck + body all change together)
+  // Sync a property change to linked materials too (e.g. face + neck + body skin all change together)
+  const setLinkedMaterial = useCallback(
+    (property: 'color' | 'shadingToony' | 'shadingShift' | 'rimLightingMix', value: string | number) => {
+      setMaterial(mat.slotName, property, value);
       if (mat.linkedSlots) {
         for (const linked of mat.linkedSlots) {
-          setMaterial(linked, 'color', c);
+          setMaterial(linked, property, value);
         }
       }
     },
@@ -46,53 +46,53 @@ function MaterialSlotEditor({ mat }: { mat: DetectedMaterial }) {
     <div className="space-y-2.5">
       <ColorPicker
         color={color}
-        onChange={handleColorChange}
+        onChange={(c) => setLinkedMaterial('color', c)}
         presets={presets}
         label="색상"
       />
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">메탈릭</span>
+          <span className="text-muted-foreground">카툰감</span>
           <span className="font-mono text-[11px] text-muted-foreground/60 w-10 text-right tabular-nums">
-            {metalness.toFixed(2)}
+            {shadingToony.toFixed(2)}
           </span>
         </div>
         <Slider
-          value={[metalness]}
+          value={[shadingToony]}
           min={0}
           max={1}
           step={0.01}
-          onValueChange={(v) => setMaterial(mat.slotName, 'metalness', Array.isArray(v) ? v[0] : v)}
+          onValueChange={(v) => setLinkedMaterial('shadingToony', Array.isArray(v) ? v[0] : v)}
         />
       </div>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">거칠기</span>
+          <span className="text-muted-foreground">셰이딩 시프트</span>
           <span className="font-mono text-[11px] text-muted-foreground/60 w-10 text-right tabular-nums">
-            {roughness.toFixed(2)}
+            {shadingShift.toFixed(2)}
           </span>
         </div>
         <Slider
-          value={[roughness]}
-          min={0}
+          value={[shadingShift]}
+          min={-1}
           max={1}
           step={0.01}
-          onValueChange={(v) => setMaterial(mat.slotName, 'roughness', Array.isArray(v) ? v[0] : v)}
+          onValueChange={(v) => setLinkedMaterial('shadingShift', Array.isArray(v) ? v[0] : v)}
         />
       </div>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">투명도</span>
+          <span className="text-muted-foreground">림 라이트</span>
           <span className="font-mono text-[11px] text-muted-foreground/60 w-10 text-right tabular-nums">
-            {opacity.toFixed(2)}
+            {rimLightingMix.toFixed(2)}
           </span>
         </div>
         <Slider
-          value={[opacity]}
+          value={[rimLightingMix]}
           min={0}
           max={1}
           step={0.01}
-          onValueChange={(v) => setMaterial(mat.slotName, 'opacity', Array.isArray(v) ? v[0] : v)}
+          onValueChange={(v) => setLinkedMaterial('rimLightingMix', Array.isArray(v) ? v[0] : v)}
         />
       </div>
     </div>

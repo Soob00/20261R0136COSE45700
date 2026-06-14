@@ -169,14 +169,14 @@ export function VRMModel({ url, onLoaded }: VRMModelProps) {
         if (slot.color) {
           applyMaterialColor(currentVrm, slotName, slot.color as string, isSkin);
         }
-        if (slot.metalness !== undefined) {
-          applyMaterialProperty(currentVrm, slotName, 'metalness', slot.metalness as number);
+        if (slot.shadingToony !== undefined) {
+          applyMaterialProperty(currentVrm, slotName, 'shadingToony', slot.shadingToony as number);
         }
-        if (slot.roughness !== undefined) {
-          applyMaterialProperty(currentVrm, slotName, 'roughness', slot.roughness as number);
+        if (slot.shadingShift !== undefined) {
+          applyMaterialProperty(currentVrm, slotName, 'shadingShift', slot.shadingShift as number);
         }
-        if (slot.opacity !== undefined) {
-          applyMaterialProperty(currentVrm, slotName, 'opacity', slot.opacity as number);
+        if (slot.rimLightingMix !== undefined) {
+          applyMaterialProperty(currentVrm, slotName, 'rimLightingMix', slot.rimLightingMix as number);
         }
         // Apply texture if URL changed
         const textureUrl = slot.textureUrl as string | undefined;
