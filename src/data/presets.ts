@@ -99,6 +99,7 @@ export const PRESET_ITEMS: PresetItem[] = [
     name: '안경',
     category: 'accessory',
     thumbnailUrl: '',
+    meshUrl: '/api/accessory-render/file?path=outputs%5Cglasses_only_001%5Cglb_raw%5Cacc_001_raw.glb',
   },
   {
     id: 'accessory-hat',

@@ -9,6 +9,8 @@ import { MaterialEditor } from '@/components/editor/MaterialEditor';
 import { VersionPanel } from '@/components/editor/VersionPanel';
 import { TemplateSelector } from '@/components/editor/TemplateSelector';
 import { PresetGrid } from '@/components/editor/PresetGrid';
+import { AccessoryFitPanel } from '@/components/editor/AccessoryFitPanel';
+import { AccessoryUpload } from '@/components/editor/AccessoryUpload';
 import { ReferenceModelUpload } from '@/components/editor/ReferenceModelUpload';
 import { FaceFeatureApply } from '@/components/editor/FaceFeatureApply';
 import { SliderSearch } from '@/components/editor/SliderSearch';
@@ -175,7 +177,7 @@ export default function DevViewerPage() {
         setApiTemplates(templates);
       }
     }).catch((e) => {
-      console.warn('Failed to fetch templates from server, using static fallback:', e);
+      // Silently fall back to static templates
     });
     return () => { cancelled = true; };
   }, [api]);
@@ -619,7 +621,9 @@ export default function DevViewerPage() {
                 <>
                   <ReferenceModelUpload />
                   <FaceFeatureApply />
+                  <AccessoryUpload />
                   <PresetGrid />
+                  <AccessoryFitPanel />
                 </>
               )}
 

@@ -77,10 +77,7 @@ export function useVersionSync() {
         useEditorStore.setState({ versions: serverVersions });
       }
     } catch (e) {
-      console.warn(
-        'Failed to load versions from server, using localStorage fallback:',
-        e
-      );
+      // Silently fall back to localStorage
     }
   }, [api, avatarId]);
 

@@ -1,6 +1,9 @@
 // PRD EditorStore 인터페이스 정의
 // Sprint 1: morphTargets, boneScales, materials, versions, undo/redo
 
+import type { AccessoryCategory } from './accessory';
+import type { AccessoryInstance } from '@/lib/accessory-attachment';
+
 export interface MorphTargetMap {
   [name: string]: number; // -1.0 ~ 1.0
 }
@@ -38,6 +41,7 @@ export interface AvatarParameters {
   morphTargets: MorphTargetMap;
   boneScales: BoneScaleMap;
   materials: MaterialMap;
+  accessories?: AccessoryInstance[];
 }
 
 export interface HairMatchResult {
@@ -74,8 +78,33 @@ export interface EditorState {
   // Hair recommendation
   hairRecommendation: HairRecommendation | null;
 
+
+
+
+export interface EditorState {
+  // Avatar identification
+  avatarId: string | null;
+  templateId: string | null;
+
+  // Editing parameters
+  morphTargets: MorphTargetMap;
+  boneScales: BoneScaleMap;
+  materials: MaterialMap;
+
+  // Hair attachments
+  hairFrontUrl: string | null;
+  hairBackUrl: string | null;
+  hairColor: string | null;
+
+  // Hair recommendation
+  hairRecommendation: HairRecommendation | null;
+
   // Outfit attachment
   outfitUrl: string | null;
+
+  // Accessory attachments
+  accessoryInstances: AccessoryInstance[];
+  selectedAccessoryInstanceId: string | null;
 
   // Version management
   versions: AvatarVersion[];
@@ -83,6 +112,9 @@ export interface EditorState {
   // UI state
   isLoading: boolean;
   error: string | null;
+
+  // Custom user uploaded/generated presets
+  customPresets: import('./preset').PresetItem[];
 }
 
 export interface EditorActions {
@@ -119,11 +151,36 @@ export interface EditorActions {
   // Outfit
   setOutfit: (url: string | null) => void;
 
+  // Accessories
+  addAccessory: (payload: { presetId: string; category: AccessoryCategory }) => void;
+  removeAccessory: (instanceId: string) => void;
+  clearAccessories: () => void;
+  replaceSingleAccessory: (payload: { presetId: string; category: AccessoryCategory }) => void;
+  selectAccessory: (instanceId: string | null) => void;
+  setAccessoryEnabled: (instanceId: string, enabled: boolean) => void;
+  setAccessoryOffsetDelta: (
+    instanceId: string,
+    value: [number, number, number],
+    options?: { pushHistory?: boolean }
+  ) => void;
+  setAccessoryRotationDelta: (
+    instanceId: string,
+    value: [number, number, number],
+    options?: { pushHistory?: boolean }
+  ) => void;
+  setAccessoryScaleMultiplier: (
+    instanceId: string,
+    value: [number, number, number],
+    options?: { pushHistory?: boolean }
+  ) => void;
+
+  // Custom Presets
+  addCustomPreset: (preset: import('./preset').PresetItem) => void;
+  removeCustomPreset: (presetId: string) => void;
+  resetAccessoryAdjustment: (instanceId: string) => void;
+
   // Pipeline
   applyPipelineResult: (params: Record<string, number>) => void;
-  applyTextureResult: (textures: Record<string, string>) => void;
-
-  // Reset all
   resetAll: () => void;
 
   // Utility

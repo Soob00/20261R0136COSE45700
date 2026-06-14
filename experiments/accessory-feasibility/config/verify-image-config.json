@@ -1,0 +1,32 @@
+{
+  "provider": "varco",
+  "varco": {
+    "target_face_type": "tri",
+    "target_face_num": 20000,
+    "generate_texture": true,
+    "seed": -1,
+    "poll_interval_seconds": 2,
+    "timeout_seconds": 600
+  },
+  "preview": {
+    "base_avatar_path": "../../public/thumbnails/hair-02.png",
+    "camera_view": "front"
+  },
+  "validation": {
+    "min_crop_size_px": 64,
+    "min_isolated_width_px": 64,
+    "min_isolated_height_px": 64,
+    "min_nontransparent_ratio": 0.05,
+    "max_nontransparent_ratio": 0.95,
+    "min_bbox_fill_ratio": 0.2,
+    "max_edge_contact_ratio": 0.15,
+    "max_connected_components": 8
+  },
+  "thresholds": {
+    "detect_success_rate": 0.8,
+    "isolate_usable_rate": 0.6,
+    "glb_usable_rate": 0.4,
+    "approved_rate": 0.3,
+    "review_time_minutes_max": 5.0
+  }
+}
