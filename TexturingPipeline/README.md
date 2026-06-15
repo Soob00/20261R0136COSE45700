@@ -36,13 +36,23 @@ TexturingPipeline은 Gemini API와 OpenCV를 혼용해 캐릭터의 피부톤, �
     * 점(mole/marking)의 위치를 landmark 기반으로 계산해 텍스처에 드로잉. 좌우 대칭 강제 처리
 
 * 👁️ **눈동자 색상 표현:**
-    * 홍채를 상/하/좌/우/중앙 5방향으로 나눠 각 방향의 지배적인 색상을 OpenCV 부채꼴 샘플링으로 추출
-    * 각도 기반 smoothstep 보간과 가우시안 블러로 자연스러운 원형 그라데이션 구현
-    * 애니 눈동자 디자인 공식을 반영한 상단 어둡기(top_shadow_ratio)와 동공 림(limbal ring) 효과 적용
+    * 홍채를 상/하/좌/우/중앙 5방향으로 나눠 각 방향의 색상을 OpenCV 부채꼴 샘플링으로 추출 (안광·동공 픽셀 자동 제외)
+    * LAB 색공간 기반 색상 적용: 동공 존(링 내부)과 홍채 존(링 외부)을 분리해 각각 처리
+    * 동공 경계 링: landmark 기준으로 이동된 중심점에서 Multiply blend로 뚜렷한 경계선 표현
+    * 상단-하단 그라데이션: `iris_top_color` / `iris_bottom_color`의 V값 비율을 LAB L 계산 단계에 직접 통합
+    * 동공 밝기: `iris_center_color` V / 홍채 평균 V 비율로 캐릭터별 동공 어둡기 자동 반영
+
+* 🪡 **아이라인 타입 선택:**
+    * 아이라인을 프로그래밍으로 보정하는 대신, 미리 제작된 베이스 텍스처 중 가장 적합한 것을 선택
+    * Gemini가 `eyeline_type`을 추출: 속눈썹 획의 존재 여부와 복잡도로 분류
+    * **타입 분류** (simple → cute → mature = 속눈썹 복잡도 증가)
+        * `simple` / `cute` — 속눈썹 없음, eyeliner 스타일로 구분
+        * `simplelash` / `cutelash` / `maturelash` — 속눈썹 있음, 획 수와 밀도로 구분
+    * 매칭되는 파일이 없으면 `eyeline_default.png`로 폴백
 
 * 🤖 **Gemini + OpenCV 역할 분리:**
-    * 시각적 판단이 필요한 특징(볼터치, 점, 눈썹 등)은 Gemini가 structured output(JSON)으로 추출
-    * 정확한 픽셀 값이 필요한 특징(홍채 색상)은 OpenCV가 landmark 기반 좌표에서 직접 샘플링
+    * 시각적 판단이 필요한 특징(볼터치, 점, 눈썹, 아이라인 타입 등)은 Gemini가 structured output(JSON)으로 추출
+    * 정확한 픽셀 값이 필요한 특징(홍채 5방향 색상 등)은 OpenCV가 landmark 기반 좌표에서 직접 샘플링
 
 * ⚡ **배치 처리 및 캐싱:**
     * `input/` 폴더의 모든 이미지를 일괄 처리
@@ -61,12 +71,13 @@ input/캐릭터.png
     → output/캐릭터명/landmarks.json
     ↓
 [2단계] Gemini API (gemini-2.5-flash)
-    → 피부톤, 볼터치, 점, 눈썹, 아이라인 등 추출
+    → 피부톤, 볼터치, 점, 눈썹, 아이라인 타입(eyeline_type) 등 추출
     → OpenCV로 홍채 5방향 색상 샘플링 (override)
     → output/캐릭터명/features.json
     ↓
 [3단계] OpenCV
-    → 마스터 텍스처 보정
+    → 마스터 텍스처 보정 (Face, Eyebrow, Pupil)
+    → 아이라인: eyeline_type에 맞는 베이스 텍스처 선택 후 복사
     → output/캐릭터명/BaseTexture_Generate_*.png
 ```
 
@@ -132,9 +143,21 @@ output/
     ├── features.json                     # 추출된 특징값
     ├── BaseTexture_Generate_Face.png     # 피부톤 + 볼터치 + 점
     ├── BaseTexture_Generate_Eyebrow.png  # 눈썹 색상
-    ├── BaseTexture_Generate_Eyeline.png  # 아이라인 + 쌍꺼풀
-    ├── BaseTexture_Generate_Pupil.png    # 눈동자 색상
+    ├── BaseTexture_Generate_Eyeline.png  # eyeline_type 기반 베이스 선택 복사
+    ├── BaseTexture_Generate_Pupil.png    # 눈동자 색상 (LAB 보정 + 동공 링 + 그라데이션)
     └── BaseTexture_Static_*.png          # 변경 없이 복사
+```
+
+아이라인 베이스 텍스처는 `assets/textures/eyeline/` 폴더에 위치한다:
+
+```
+assets/textures/eyeline/
+    ├── eyeline_default.png    # 폴백 (매칭 실패 시)
+    ├── eyeline_simple.png     # 속눈썹 없음, 간결한 라인
+    ├── eyeline_simplelash.png # 속눈썹 있음, 간결
+    ├── eyeline_cute.png       # 속눈썹 없음, 중간 스타일
+    ├── eyeline_cutelash.png   # 속눈썹 있음, 중간 밀도
+    └── eyeline_maturelash.png # 속눈썹 있음, 고밀도·드라마틱
 ```
 
 > **캐싱:** `features.json`이 이미 존재하면 Gemini 호출을 스킵한다. 재추출이 필요하면 해당 파일을 삭제 후 실행한다.
@@ -175,12 +198,12 @@ output/
 
 ### 홍채 색상 샘플링
 
-홍채를 상/하/좌/우/중앙 5방향 부채꼴 영역으로 나눠 각 방향의 지배적인 색상을 직접 샘플링한다. 안광(흰색 하이라이트) 영역을 자동으로 제외하고 채도가 가장 높은 픽셀을 선택한다.
+홍채를 상/하/좌/우/중앙 5방향 부채꼴 영역으로 나눠 각 방향의 대표 색상을 직접 샘플링한다.
 
-| 홍채 5방향 샘플링 영역 |
-| :---: |
-| ![](docs/img/iris_sector_firefly.png) |
-| 초록=상단, 빨강=하단, 파랑=좌, 주황=우, 마젠타=중앙 |
+* **상/하/좌/우**: `sample_sector` — r=0.2~0.8 구간, 채도 상위 25% 픽셀 평균. 안광(V>200, chroma<40)과 동공(V<30) 픽셀 자동 제외
+* **중앙**: `sample_center` — r<0.15 좁은 반경에서 MEDIAN 사용. 넓은 반경에서 흔한 하이라이트 오염 방지
+
+상단-하단 그라데이션은 `iris_top_color` / `iris_bottom_color`의 V값(= `max(R,G,B)`) 비율로 자동 계산된다. `top_shadow_ratio` 필드는 features.json에 기록되지만 현재 렌더링에는 사용되지 않는다.
 
 ---
 
@@ -195,11 +218,21 @@ output/
 
 ### 눈동자 표현
 
-일반적인 애니메이션 캐릭터 눈동자 디자인의 공식을 분석하여 다음 요소들을 구현했다:
+일반적인 애니메이션 캐릭터 눈동자 디자인을 분석하여 다음 요소들을 구현했다:
 
-* **5방향 색상 그라데이션:** 홍채를 상/하/좌/우/중앙 부채꼴 영역으로 나눠 각 방향의 지배적인 색상 추출. 각도 기반 smoothstep 보간과 가우시안 블러로 자연스러운 원형 그라데이션 구현
-* **상단 어둡기:** 애니 눈동자는 상단이 어두운 것이 특징이며, Gemini가 추출한 `top_shadow_ratio` 값으로 그 정도를 조절
-* **동공 림(limbal ring):** 동공 경계 안쪽에 채도를 높이고 밝기를 낮추는 링 효과를 고정 UV 좌표에 적용
+* **5방향 색상 그라데이션:** 홍채를 상/하/좌/우/중앙 부채꼴 영역으로 나눠 OpenCV 직접 샘플링. LAB 색공간에서 위치별 타겟 색상을 보간해 자연스러운 그라데이션 구현
+* **동공·홍채 존 분리:** 동공 경계(링)를 기준으로 내측과 외측을 분리 처리. 동공 밝기는 `iris_center_color` V / 홍채 평균 V 비율로 캐릭터별 자동 결정
+* **동공 경계 링:** 동공과 홍채의 경계를 따라 Multiply blend로 어두운 윤곽선 그라데이션 적용. 링 중심점은 베이스 텍스처 구조에 맞춰 이동 가능
+* **상단-하단 그라데이션:** `iris_top_color`와 `iris_bottom_color`의 실제 V값 비율을 LAB L 계산에 직접 통합 — L_MIN_TGT 부스트 이전에 적용해 상단 어둡기가 인위적으로 올라가지 않도록 함
+* **색상 추출 개선:** `sample_center`는 r<0.15의 좁은 반경에서 MEDIAN 사용 (하이라이트에 끌려가지 않도록), `sample_sector`는 채도 상위 25% 평균 + 안광·동공 픽셀 자동 제외
+
+### 아이라인 타입 선택
+
+속눈썹 획의 복잡도에 따라 5가지 베이스 텍스처 중 하나를 자동 선택한다:
+
+* **타입 판별 기준:** ① 속눈썹 획 존재 여부 (lash suffix), ② 획의 수·밀도 (simple/cute/mature)
+* **Gemini 판단:** 속눈썹 획이 몇 개 그려져 있는지를 직접 보고 분류 (`eyeline_type` 필드)
+* **폴백:** 매칭 파일이 없으면 `eyeline_default.png` 사용
 
 ### 볼터치 및 점 위치의 좌우 대칭
 
@@ -232,8 +265,10 @@ UV 텍스처가 좌우 대칭 구조이므로, 좌우 쌍의 점은 텍스처에
 * **Gemini 503 에러:** 일시적인 서버 과부하. 자동 재시도(최대 5회, 15초 간격)되므로 대기하면 된다.
 * **features.json이 업데이트되지 않음:** 캐싱으로 인해 기존 파일을 재사용하는 것. 재추출하려면 해당 파일을 삭제 후 실행한다.
 * **점 위치가 어긋남:** Gemini의 `offset_y` 추출이 부정확한 경우. `output/캐릭터명/features.json`에서 `markings` 항목의 `offset_y` 값을 직접 수정 후 `python3 src/adjust_texture.py`만 재실행한다.
-* **홍채 색상이 부정확함:** `debug/iris_sector_캐릭터명.png`로 샘플링 영역이 실제 홍채 위에 찍혔는지 확인한다. 안광(흰색 하이라이트)이 샘플링 영역과 겹치는 경우 발생할 수 있다.
-* **볼터치가 이상한 위치에 찍힘:** `debug/blush_uv_debug.png`로 UV 좌표가 올바른지 확인한다.
+* **홍채 색상이 부정확함:** `output/캐릭터명/features.json`에서 `iris_top_color` / `iris_bottom_color` / `iris_center_color` 값을 확인한다. 안광(흰색 하이라이트)이 샘플링 영역과 겹치면 색상이 밝게 추출될 수 있다. 수동 수정 후 `python3 src/adjust_texture.py`만 재실행한다.
+* **볼터치가 이상한 위치에 찍힘:** `features.json`의 `blush_position` 값을 직접 수정 후 재실행한다.
+* **눈동자 상단-하단 그라데이션이 과하거나 약함:** 그라데이션은 `iris_top_color`와 `iris_bottom_color`의 V값 비율로 결정된다. `features.json`에서 해당 색상 값을 조정 후 재실행한다. (`top_shadow_ratio` 필드는 현재 렌더링에 사용되지 않는다.)
+* **아이라인 타입이 잘못 선택됨:** `features.json`의 `eyeline_type` 값을 직접 수정(`simple`/`simplelash`/`cute`/`cutelash`/`maturelash`) 후 `python3 src/adjust_texture.py`만 재실행한다. 해당 파일이 `assets/textures/eyeline/` 에 존재해야 한다.
 
 ---
 

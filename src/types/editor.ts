@@ -60,26 +60,15 @@ export interface HairRecommendation {
   extractedColor: string;
 }
 
-export interface EditorState {
-  // Avatar identification
-  avatarId: string | null;
-  templateId: string | null;
-
-  // Editing parameters
-  morphTargets: MorphTargetMap;
-  boneScales: BoneScaleMap;
-  materials: MaterialMap;
-
-  // Hair attachments
-  hairFrontUrl: string | null;
-  hairBackUrl: string | null;
-  hairColor: string | null;
-
-  // Hair recommendation
-  hairRecommendation: HairRecommendation | null;
-
-
-
+export interface ProposedStampItem {
+  shape: 'circle' | 'oval' | 'star' | 'heart' | 'diamond';
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  opacity: number;
+  rotation: number;
+}
 
 export interface EditorState {
   // Avatar identification
@@ -115,6 +104,13 @@ export interface EditorState {
 
   // Custom user uploaded/generated presets
   customPresets: import('./preset').PresetItem[];
+
+  // Baseline morph targets from pipeline — used as reset target instead of zero
+  baselineMorphTargets: MorphTargetMap;
+
+  // Stamps proposed by the texture pipeline (markings + highlights)
+  // keyed by texture slot ID; cleared once consumed by TextureStampEditor
+  proposedStamps: Record<string, ProposedStampItem[]> | null;
 }
 
 export interface EditorActions {
@@ -181,6 +177,12 @@ export interface EditorActions {
 
   // Pipeline
   applyPipelineResult: (params: Record<string, number>) => void;
+  applyTextureResult: (textures: Record<string, string>) => void;
+  setProposedStamps: (stamps: Record<string, ProposedStampItem[]> | null) => void;
+  /** Update a single slot's textureUrl without undo — used by stamp editor after render */
+  setSlotTextureUrl: (slotId: string, url: string) => void;
+
+  // Reset all
   resetAll: () => void;
 
   // Utility

@@ -60,7 +60,9 @@ function ToolbarButton({
     <button
       onClick={onClick}
       title={title}
-      className={`relative p-2 rounded-lg transition-all duration-200 ${
+      aria-label={title}
+      aria-pressed={active}
+      className={`relative p-2.5 rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
         active
           ? 'bg-primary/20 text-primary shadow-[0_0_12px_oklch(0.7_0.18_270/20%)]'
           : 'text-white/50 hover:text-white/90 hover:bg-white/[0.08]'

@@ -54,6 +54,11 @@ export function VRMModel({ url, onLoaded }: VRMModelProps) {
         detectedMats.filter((m) => m.category === 'skin').map((m) => m.slotName)
       );
 
+      // Blank out EyeHighlight texture — handled via stamps instead
+      const blankCanvas = document.createElement('canvas');
+      blankCanvas.width = 1; blankCanvas.height = 1;
+      applyMaterialTexture(vrm, 'BaseTexture_Static_EyeHighlight', blankCanvas.toDataURL('image/png'));
+
       console.log('[VRM] Loaded successfully');
       console.log('[VRM] Expressions:', expressionNames);
       console.log('[VRM] MorphTargets:', morphTargetNames);

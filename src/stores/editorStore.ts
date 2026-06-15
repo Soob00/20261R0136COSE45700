@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { EditorState, EditorActions, AvatarVersion, MaterialSlot, HairRecommendation } from '@/types/editor';
+import type { EditorState, EditorActions, AvatarVersion, MaterialSlot } from '@/types/editor';
 import type { AccessoryCategory } from '@/types/accessory';
 import {
   createDefaultAccessoryAdjustment,
@@ -18,10 +18,11 @@ interface HistoryEntry {
   outfitUrl: EditorState['outfitUrl'];
   accessoryInstances: EditorState['accessoryInstances'];
   selectedAccessoryInstanceId: EditorState['selectedAccessoryInstanceId'];
+  baselineMorphTargets: EditorState['baselineMorphTargets'];
 }
 
 const MAX_HISTORY = 50;
-let undoStack: HistoryEntry[] = [];
+const undoStack: HistoryEntry[] = [];
 let redoStack: HistoryEntry[] = [];
 
 function snapshot(state: EditorState): HistoryEntry {
@@ -48,6 +49,7 @@ function snapshot(state: EditorState): HistoryEntry {
       },
     })),
     selectedAccessoryInstanceId: state.selectedAccessoryInstanceId,
+    baselineMorphTargets: { ...state.baselineMorphTargets },
   };
 }
 
@@ -140,6 +142,8 @@ const initialState: EditorState = {
   isLoading: false,
   error: null,
   customPresets: loadCustomPresetsFromStorage(),
+  baselineMorphTargets: {},
+  proposedStamps: null,
 };
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -155,7 +159,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   resetMorphTargets: () => {
     pushUndo(get());
-    set({ morphTargets: {} });
+    const baseline = get().baselineMorphTargets;
+    set({ morphTargets: { ...baseline } });
   },
 
   // --- Bone Scales ---
@@ -462,6 +467,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       outfitUrl: prev.outfitUrl,
       accessoryInstances: prev.accessoryInstances,
       selectedAccessoryInstanceId: prev.selectedAccessoryInstanceId,
+      baselineMorphTargets: prev.baselineMorphTargets,
     });
   },
 
@@ -480,6 +486,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       outfitUrl: next.outfitUrl,
       accessoryInstances: next.accessoryInstances,
       selectedAccessoryInstanceId: next.selectedAccessoryInstanceId,
+      baselineMorphTargets: next.baselineMorphTargets,
     });
   },
 
@@ -491,6 +498,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     pushUndo(get());
     set((state) => ({
       morphTargets: { ...state.morphTargets, ...params },
+      baselineMorphTargets: { ...state.baselineMorphTargets, ...params },
     }));
   },
 
@@ -506,6 +514,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
+  setProposedStamps: (stamps) => set({ proposedStamps: stamps }),
+
+  setSlotTextureUrl: (slotId, url) => set((state) => ({
+    materials: {
+      ...state.materials,
+      [slotId]: { ...(state.materials[slotId] ?? { name: slotId }), textureUrl: url },
+    },
+  })),
+
   // --- Reset All ---
   resetAll: () => {
     pushUndo(get());
@@ -519,6 +536,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       outfitUrl: null,
       accessoryInstances: [],
       selectedAccessoryInstanceId: null,
+      baselineMorphTargets: {},
+      proposedStamps: null,
     });
   },
 
