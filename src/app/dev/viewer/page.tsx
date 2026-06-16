@@ -10,10 +10,13 @@ import { TextureStampEditor } from '@/components/editor/TextureStampEditor';
 import { VersionPanel } from '@/components/editor/VersionPanel';
 import { TemplateSelector } from '@/components/editor/TemplateSelector';
 import { PresetGrid } from '@/components/editor/PresetGrid';
+import { AccessoryFitPanel } from '@/components/editor/AccessoryFitPanel';
+import { AccessoryUpload } from '@/components/editor/AccessoryUpload';
 import { ReferenceModelUpload } from '@/components/editor/ReferenceModelUpload';
 import { FaceFeatureApply } from '@/components/editor/FaceFeatureApply';
 import { SliderSearch } from '@/components/editor/SliderSearch';
 import { QuickPresets } from '@/components/editor/QuickPresets';
+import BackgroundTasks from '@/components/editor/BackgroundTasks';
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar';
 import { useEditorStore } from '@/stores/editorStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -49,7 +52,8 @@ const ThreeJSViewer = dynamic(
   { ssr: false }
 );
 
-const DEFAULT_MODEL_URL = (process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? '').replace(/\/$/, '') + '/public/models/CustomizableCharacter.vrm';
+const DEFAULT_MODEL_URL = (process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? '').replace(/\/$/, '') + '/models/CustomizableCharacter.vrm';
+// Force Turbopack cache invalidation
 
 
 const MORPH_LABELS: Record<string, string> = {
@@ -178,7 +182,7 @@ export default function DevViewerPage() {
         setApiTemplates(templates);
       }
     }).catch((e) => {
-      console.warn('Failed to fetch templates from server, using static fallback:', e);
+      // Silently fall back to static templates
     });
     return () => { cancelled = true; };
   }, [api]);
@@ -508,7 +512,7 @@ export default function DevViewerPage() {
                   className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-accent/50 text-muted-foreground rounded-lg hover:bg-accent hover:text-foreground transition-colors border border-border/30"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  {Object.keys(baselineMorphTargets).length > 0
+                  {Object.keys(baselineMorphTargets || {}).length > 0
                     ? '레퍼런스 기준으로 초기화'
                     : '전체 초기화'}
                 </button>
@@ -636,7 +640,9 @@ export default function DevViewerPage() {
                 <>
                   <ReferenceModelUpload />
                   <FaceFeatureApply />
+                  <AccessoryUpload />
                   <PresetGrid />
+                  <AccessoryFitPanel />
                 </>
               )}
 
@@ -740,6 +746,8 @@ export default function DevViewerPage() {
           </div>
         )}
       </div>
+
+      <BackgroundTasks />
     </div>
   );
 }

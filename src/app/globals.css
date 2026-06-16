@@ -189,3 +189,15 @@
   pointer-events: none;
   z-index: 0;
 }
+
+@keyframes scan {
+  0% { top: 0%; }
+  50% { top: 100%; }
+  100% { top: 0%; }
+}
+
+@keyframes scan-fade {
+  0% { top: -33%; }
+  50% { top: 100%; }
+  100% { top: -33%; }
+}

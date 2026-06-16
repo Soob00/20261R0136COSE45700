@@ -6,6 +6,8 @@ on:
       - deploy
   workflow_dispatch:
 
+permissions: {}
+
 concurrency:
   group: ec2-deploy
   cancel-in-progress: true

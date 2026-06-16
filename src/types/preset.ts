@@ -1,6 +1,6 @@
 import type { MorphTargetMap, BoneScaleMap, MaterialMap } from './editor';
 
-export type PresetCategory = 'hair' | 'outfit' | 'accessory';
+export type PresetCategory = 'hair' | 'outfit' | 'accessory' | (string & {});
 
 export interface PresetItem {
   id: string;

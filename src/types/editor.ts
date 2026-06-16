@@ -1,6 +1,9 @@
 // PRD EditorStore 인터페이스 정의
 // Sprint 1: morphTargets, boneScales, materials, versions, undo/redo
 
+import type { AccessoryCategory } from './accessory';
+import type { AccessoryInstance } from '@/lib/accessory-attachment';
+
 export interface MorphTargetMap {
   [name: string]: number; // -1.0 ~ 1.0
 }
@@ -38,6 +41,7 @@ export interface AvatarParameters {
   morphTargets: MorphTargetMap;
   boneScales: BoneScaleMap;
   materials: MaterialMap;
+  accessories?: AccessoryInstance[];
 }
 
 export interface HairMatchResult {
@@ -50,6 +54,7 @@ export interface HairMatchResult {
 export type MatchConfidence = 'high' | 'medium' | 'low';
 
 export interface HairRecommendation {
+
   bestMatch: HairMatchResult;
   allResults: HairMatchResult[];
   confidence: MatchConfidence;
@@ -77,6 +82,10 @@ export interface EditorState {
   // Outfit attachment
   outfitUrl: string | null;
 
+  // Accessory attachments
+  accessoryInstances: AccessoryInstance[];
+  selectedAccessoryInstanceId: string | null;
+
   // Version management
   versions: AvatarVersion[];
 
@@ -84,11 +93,18 @@ export interface EditorState {
   isLoading: boolean;
   error: string | null;
 
-  // Baseline morph targets from pipeline — used as reset target instead of zero
-  baselineMorphTargets: MorphTargetMap;
+  // Custom user uploaded/generated presets
+  customPresets: import('./preset').PresetItem[];
 
-  // Stamps proposed by the texture pipeline (markings + highlights)
-  // keyed by texture slot ID; cleared once consumed by TextureStampEditor
+  // Background Tasks
+  backgroundTasks: AccessoryTask[];
+
+  // Baseline VRM state (for resetting)
+  baselineMorphTargets: MorphTargetMap;
+  baselineBoneScales: BoneScaleMap;
+  baselineMaterials: MaterialMap;
+
+  // Proposed AI Stamps
   proposedStamps: Record<string, ProposedStampItem[]> | null;
 }
 
@@ -100,6 +116,15 @@ export interface ProposedStampItem {
   color: string;
   opacity: number;
   rotation: number;
+}
+
+export interface AccessoryTask {
+  id: string;
+  filename: string;
+  category: AccessoryCategory;
+  status: 'uploading' | 'processing' | 'success' | 'error';
+  errorMessage?: string;
+  resultUrl?: string;
 }
 
 export interface EditorActions {
@@ -135,6 +160,40 @@ export interface EditorActions {
 
   // Outfit
   setOutfit: (url: string | null) => void;
+
+  // Accessories
+  addAccessory: (payload: { presetId: string; category: AccessoryCategory }) => void;
+  removeAccessory: (instanceId: string) => void;
+  clearAccessories: () => void;
+  replaceSingleAccessory: (payload: { presetId: string; category: AccessoryCategory }) => void;
+  selectAccessory: (instanceId: string | null) => void;
+  setAccessoryEnabled: (instanceId: string, enabled: boolean) => void;
+  
+  // Background Tasks
+  addBackgroundTask: (task: AccessoryTask) => void;
+  updateBackgroundTask: (id: string, updates: Partial<AccessoryTask>) => void;
+  removeBackgroundTask: (id: string) => void;
+  
+  setAccessoryOffsetDelta: (
+    instanceId: string,
+    value: [number, number, number],
+    options?: { pushHistory?: boolean }
+  ) => void;
+  setAccessoryRotationDelta: (
+    instanceId: string,
+    value: [number, number, number],
+    options?: { pushHistory?: boolean }
+  ) => void;
+  setAccessoryScaleMultiplier: (
+    instanceId: string,
+    value: [number, number, number],
+    options?: { pushHistory?: boolean }
+  ) => void;
+
+  // Custom Presets
+  addCustomPreset: (preset: import('./preset').PresetItem) => void;
+  removeCustomPreset: (presetId: string) => void;
+  resetAccessoryAdjustment: (instanceId: string) => void;
 
   // Pipeline
   applyPipelineResult: (params: Record<string, number>) => void;

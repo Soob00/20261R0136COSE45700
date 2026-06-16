@@ -6,6 +6,7 @@ import { Stats } from '@react-three/drei';
 import { VRMModel } from './VRMModel';
 import { HairAttachment } from './HairAttachment';
 import { OutfitAttachment } from './OutfitAttachment';
+import { AccessoryAttachment } from './AccessoryAttachment';
 import { CameraControls } from './CameraControls';
 import { SceneLighting } from './SceneLighting';
 import type { DetectedMaterial } from '@/lib/vrm/materials';
@@ -48,6 +49,7 @@ export const ThreeJSViewer = forwardRef<ThreeJSViewerHandle, ThreeJSViewerProps>
           <VRMModel url={modelUrl} onLoaded={onModelLoaded} />
           <HairAttachment />
           <OutfitAttachment />
+          <AccessoryAttachment />
         </Suspense>
         {showGrid && <gridHelper args={[10, 20, '#2a2540', '#1e1a30']} />}
         {showStats && <Stats />}
