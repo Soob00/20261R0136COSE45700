@@ -2,6 +2,7 @@ import type { TemplateMetadata } from '@/types/template';
 import { assetUrl } from '@/lib/assetUrl';
 
 export const TEMPLATES: TemplateMetadata[] = [
+  // Force Turbopack cache invalidation
   {
     id: 'customizable-default',
     name: 'Default',

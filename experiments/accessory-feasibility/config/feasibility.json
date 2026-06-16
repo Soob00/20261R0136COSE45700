@@ -1,0 +1,148 @@
+{
+  "provider": "varco",
+  "varco": {
+    "target_face_type": "tri",
+    "target_face_num": 20000,
+    "generate_texture": true,
+    "seed": -1,
+    "poll_interval_seconds": 2,
+    "timeout_seconds": 600
+  },
+  "preview": {
+    "attach_render_mode": "3d",
+    "base_avatar_model_path": "../../public/models/CustomizableCharacter.vrm",
+    "base_avatar_path": "../../public/thumbnails/hair-02.png",
+    "camera_view": "front",
+    "render_width": 1024,
+    "render_height": 1024,
+    "background": "transparent",
+    "camera_distance": 1.8,
+    "camera_fov": 30,
+    "light_preset": "studio_soft",
+    "fallback_to_2d": true,
+    "avatar_template_id": "base_vrm_v1",
+    "render_base_url": "http://localhost:3000",
+    "render_timeout_ms": 30000,
+    "render_script_path": "scripts/render-accessory-attach.mjs"
+  },
+  "attachment": {
+    "default_anchor_bone_by_region": {
+      "face_center": "head",
+      "head_top": "head",
+      "head_side_upper_left": "head",
+      "head_side_upper_right": "head"
+    },
+    "default_scale_by_category": {
+      "glasses": 1.0,
+      "hairpin": 0.35,
+      "hair_clip": 0.4,
+      "hair_bow": 0.55
+    },
+    "default_offset_by_region": {
+      "face_center": [
+        0.0,
+        0.02,
+        0.08
+      ],
+      "head_top": [
+        0.0,
+        0.18,
+        0.0
+      ],
+      "head_side_upper_left": [
+        -0.09,
+        0.12,
+        0.0
+      ],
+      "head_side_upper_right": [
+        0.09,
+        0.12,
+        0.0
+      ]
+    },
+    "default_rotation_by_region": {
+      "face_center": [
+        0,
+        0,
+        0
+      ],
+      "head_top": [
+        0,
+        0,
+        0
+      ],
+      "head_side_upper_left": [
+        0,
+        0,
+        -12
+      ],
+      "head_side_upper_right": [
+        0,
+        0,
+        12
+      ]
+    }
+  },
+  "validation": {
+    "min_crop_size_px": 96,
+    "min_isolated_width_px": 64,
+    "min_isolated_height_px": 64,
+    "min_nontransparent_ratio": 0.05,
+    "max_nontransparent_ratio": 0.95,
+    "min_bbox_fill_ratio": 0.2,
+    "max_edge_contact_ratio": 0.15,
+    "max_connected_components": 8
+  },
+  "isolate": {
+    "provider": "gemini",
+    "fallback_provider": "deterministic",
+    "bg_distance_threshold": 36,
+    "grayscale_edge_threshold": 24,
+    "dark_luma_threshold": 100,
+    "color_distance_threshold": 80,
+    "gemini": {
+      "model_env": "GEMINI_ISOLATE_MODEL",
+      "default_model": "gemini-2.5-flash-image",
+      "timeout_seconds": 60,
+      "max_retries": 1,
+      "output_format": "png_transparent",
+      "sanity_min_alpha_ratio": 0.002,
+      "sanity_max_alpha_ratio": 0.80
+    },
+    "glasses": {
+      "max_selected_components": 4,
+      "min_selected_area_ratio": 0.008,
+      "max_selected_area_ratio": 0.20,
+      "max_largest_selected_component_ratio": 0.2,
+      "max_nontransparent_ratio": 0.45,
+      "min_selected_bounds_width_ratio": 0.18,
+      "max_selected_bounds_height_ratio": 0.28,
+      "max_selected_cluster_span_y": 0.28,
+      "max_selected_center_offset_y": 0.12,
+      "min_aspect_ratio": 1.2,
+      "max_aspect_ratio": 5.0
+    },
+    "hair_accessory": {
+      "max_selected_components": 3,
+      "min_selected_area_ratio": 0.005,
+      "max_selected_area_ratio": 0.18,
+      "max_largest_selected_component_ratio": 0.2,
+      "max_selected_bounds_width_ratio": 0.45,
+      "max_selected_bounds_height_ratio": 0.45,
+      "max_component_area_ratio": 0.25,
+      "max_component_fill_ratio": 0.75,
+      "require_edge_mask_support": true
+    },
+    "accessory_only": {
+      "near_white_threshold": 245,
+      "background_distance_threshold": 20.0
+    }
+  },
+  "thresholds": {
+    "detect_success_rate": 0.8,
+    "isolate_usable_rate": 0.6,
+    "glb_usable_rate": 0.4,
+    "approved_rate": 0.3,
+    "review_time_minutes_max": 5.0
+  }
+}

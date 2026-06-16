@@ -35,6 +35,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+#image
+*.png
+*.webp
+
 # vercel
 .vercel
 
@@ -59,3 +63,10 @@ __pycache__/
 .gemini/
 .omc/
 .agents/
+
+# Accessory feasibility experiment artifacts
+experiments/accessory-feasibility/config/samples.json
+experiments/accessory-feasibility/outputs/
+experiments/accessory-feasibility/reports/*.json
+experiments/accessory-feasibility/reports/failure-gallery.md
+experiments/accessory-feasibility/**/*.glb

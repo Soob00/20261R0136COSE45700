@@ -2,6 +2,7 @@ import type { PresetItem, QuickPreset } from '@/types/preset';
 import { assetUrl } from '@/lib/assetUrl';
 
 export const PRESET_ITEMS: PresetItem[] = [
+  // Force Turbopack cache invalidation
   {
     id: 'hair-none',
     name: '없음',
@@ -123,14 +124,10 @@ export const PRESET_ITEMS: PresetItem[] = [
     id: 'accessory-glasses',
     name: '안경',
     category: 'accessory',
-    thumbnailUrl: '',
+    thumbnailUrl: '/thumbnails/glasses.png',
+    meshUrl: '/api/accessory-render/file?path=outputs%5Cglasses_only_001%5Cglb_raw%5Cacc_001_raw.glb',
   },
-  {
-    id: 'accessory-hat',
-    name: '모자',
-    category: 'accessory',
-    thumbnailUrl: '',
-  },
+
 ];
 
 // --- 얼굴 프리셋 (Fcl_* morph targets) ---
