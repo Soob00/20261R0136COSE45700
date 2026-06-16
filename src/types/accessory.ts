@@ -2,7 +2,10 @@ export type AccessoryCategory =
   | 'glasses'
   | 'hairpin'
   | 'hair_clip'
-  | 'hair_bow';
+  | 'hair_bow'
+  | 'bracelet_left'
+  | 'bracelet_right'
+  | 'other';
 
 export type HeadAccessorySubtype =
   | 'headband'
@@ -13,13 +16,19 @@ export type AccessorySlot =
   | 'face_center'
   | 'head_side_left'
   | 'head_side_right'
-  | 'head_top';
+  | 'head_top'
+  | 'left_wrist'
+  | 'right_wrist'
+  | 'other';
 
 export type AttachRegion =
   | 'face_center'
   | 'head_side_upper_left'
   | 'head_side_upper_right'
-  | 'head_top';
+  | 'head_top'
+  | 'left_wrist'
+  | 'right_wrist'
+  | 'other';
 
 export type ReviewStatus = 'pending' | 'approved' | 'rejected';
 

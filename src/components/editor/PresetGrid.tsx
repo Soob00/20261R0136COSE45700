@@ -58,7 +58,8 @@ export function PresetGrid({ selectedPresets = {}, onSelectPreset }: PresetGridP
 
   const resolveAccessoryCategory = (presetId: string): AccessoryCategory | null => {
     if (presetId === 'accessory-glasses') return 'glasses';
-    if (customPresets.some((p) => p.id === presetId)) return 'glasses';
+    const custom = customPresets.find((p) => p.id === presetId);
+    if (custom) return custom.category as AccessoryCategory;
     if (presetId.startsWith('http') || presetId.startsWith('/api/')) return 'glasses';
     return null;
   };
@@ -114,7 +115,9 @@ export function PresetGrid({ selectedPresets = {}, onSelectPreset }: PresetGridP
 
       {CATEGORIES.map(({ id, label }) => {
         let presets = getPresetsByCategory(id);
-        const customForCategory = customPresets.filter((p) => p.category === id);
+        const customForCategory = id === 'accessory'
+          ? customPresets.filter((p) => p.category !== 'hair' && p.category !== 'outfit')
+          : customPresets.filter((p) => p.category === id);
         if (customForCategory.length > 0) {
           presets = [...presets, ...customForCategory];
         }

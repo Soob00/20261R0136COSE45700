@@ -31,11 +31,14 @@ function resolveAccessoryAssetUrl(assetModelPath: string): string {
 
 function resolveAnchorObject(vrm: VRM, requestedName: string): THREE.Object3D {
   const humanoid = (vrm as VRM & { humanoid?: { humanBones?: Record<string, { node?: THREE.Object3D }> } }).humanoid;
-  const headNode = humanoid?.humanBones?.head?.node ?? null;
-  if (requestedName === 'head' && headNode) {
-    return headNode;
+  
+  // 1. Check standard VRM humanoid bone first
+  const humanoidNode = humanoid?.humanBones?.[requestedName]?.node;
+  if (humanoidNode) {
+    return humanoidNode;
   }
 
+  // 2. Fallback to exact object name match
   let found: THREE.Object3D | null = null;
   vrm.scene.traverse((object) => {
     if (!found && object.name === requestedName) {
@@ -46,6 +49,8 @@ function resolveAnchorObject(vrm: VRM, requestedName: string): THREE.Object3D {
   if (found) {
     return found;
   }
+
+  const headNode = humanoid?.humanBones?.head?.node ?? null;
   if (headNode) {
     console.warn(`[AccessoryAttachment] anchor "${requestedName}" not found, fallback to head`);
     return headNode;
@@ -182,12 +187,43 @@ export function AccessoryAttachment() {
               }
             });
 
+            // 1. Auto Normalization (Scale to 1.0, Center Pivot)
+            const box = new THREE.Box3().setFromObject(loadedGroup);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+
+            const normalizedRoot = new THREE.Group();
+            normalizedRoot.name = `NormalizedRoot:${instance.instanceId}`;
+
+            const maxDim = Math.max(size.x, size.y, size.z);
+            if (maxDim > 0) {
+              normalizedRoot.scale.setScalar(1.0 / maxDim);
+            }
+            
+            loadedGroup.position.copy(center).multiplyScalar(-1);
+            normalizedRoot.add(loadedGroup);
+
+            // 2. Apply Preset/Instance Transform
             const attachmentRoot = new THREE.Group();
             attachmentRoot.name = `AccessoryAttachmentRoot:${instance.instanceId}`;
             applyResolvedTransform(attachmentRoot, resolved);
-            attachmentRoot.add(loadedGroup);
+            attachmentRoot.add(normalizedRoot);
 
             const anchorObject = resolveAnchorObject(baseVrm, resolved.anchorBone);
+
+            // 3. Dynamic Bone Length Offset (e.g., slide down forearm to wrist)
+            const isLeftArm = resolved.anchorBone === 'leftLowerArm';
+            const isRightArm = resolved.anchorBone === 'rightLowerArm';
+            if (isLeftArm || isRightArm) {
+              const childBoneName = isLeftArm ? 'leftHand' : 'rightHand';
+              const childObject = resolveAnchorObject(baseVrm, childBoneName);
+              if (childObject && childObject !== anchorObject) {
+                const wristOffset = childObject.position.clone();
+                wristOffset.multiplyScalar(0.9); // Place at 90% of forearm length
+                attachmentRoot.position.add(wristOffset);
+              }
+            }
+
             anchorObject.add(attachmentRoot);
 
             attachedRef.current.set(instance.instanceId, {

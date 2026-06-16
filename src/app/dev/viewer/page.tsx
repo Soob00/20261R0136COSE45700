@@ -16,6 +16,7 @@ import { ReferenceModelUpload } from '@/components/editor/ReferenceModelUpload';
 import { FaceFeatureApply } from '@/components/editor/FaceFeatureApply';
 import { SliderSearch } from '@/components/editor/SliderSearch';
 import { QuickPresets } from '@/components/editor/QuickPresets';
+import BackgroundTasks from '@/components/editor/BackgroundTasks';
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar';
 import { useEditorStore } from '@/stores/editorStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -744,6 +745,8 @@ export default function DevViewerPage() {
           </div>
         )}
       </div>
+
+      <BackgroundTasks />
     </div>
   );
 }

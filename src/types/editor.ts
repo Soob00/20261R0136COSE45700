@@ -54,20 +54,11 @@ export interface HairMatchResult {
 export type MatchConfidence = 'high' | 'medium' | 'low';
 
 export interface HairRecommendation {
+
   bestMatch: HairMatchResult;
   allResults: HairMatchResult[];
   confidence: MatchConfidence;
   extractedColor: string;
-}
-
-export interface ProposedStampItem {
-  shape: 'circle' | 'oval' | 'star' | 'heart' | 'diamond';
-  x: number;
-  y: number;
-  size: number;
-  color: string;
-  opacity: number;
-  rotation: number;
 }
 
 export interface EditorState {
@@ -105,12 +96,17 @@ export interface EditorState {
   // Custom user uploaded/generated presets
   customPresets: import('./preset').PresetItem[];
 
-  // Baseline morph targets from pipeline — used as reset target instead of zero
-  baselineMorphTargets: MorphTargetMap;
+  // Background Tasks
+  backgroundTasks: AccessoryTask[];
+}
 
-  // Stamps proposed by the texture pipeline (markings + highlights)
-  // keyed by texture slot ID; cleared once consumed by TextureStampEditor
-  proposedStamps: Record<string, ProposedStampItem[]> | null;
+export interface AccessoryTask {
+  id: string;
+  filename: string;
+  category: AccessoryCategory;
+  status: 'uploading' | 'processing' | 'success' | 'error';
+  errorMessage?: string;
+  resultUrl?: string;
 }
 
 export interface EditorActions {
@@ -125,6 +121,7 @@ export interface EditorActions {
   // Materials
   setMaterial: (slotName: string, property: keyof MaterialSlot, value: string | number) => void;
   resetMaterials: () => void;
+  applyTextureResult: (textures: Record<string, string>) => void;
 
   // Versions
   saveVersion: (name?: string, thumbnailDataUrl?: string) => void;
@@ -154,6 +151,12 @@ export interface EditorActions {
   replaceSingleAccessory: (payload: { presetId: string; category: AccessoryCategory }) => void;
   selectAccessory: (instanceId: string | null) => void;
   setAccessoryEnabled: (instanceId: string, enabled: boolean) => void;
+  
+  // Background Tasks
+  addBackgroundTask: (task: AccessoryTask) => void;
+  updateBackgroundTask: (id: string, updates: Partial<AccessoryTask>) => void;
+  removeBackgroundTask: (id: string) => void;
+  
   setAccessoryOffsetDelta: (
     instanceId: string,
     value: [number, number, number],

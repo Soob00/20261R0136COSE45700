@@ -12,6 +12,9 @@ const DEFAULT_ANCHOR_BONE_BY_REGION: Record<AttachRegion, string> = {
   head_side_upper_left: 'head',
   head_side_upper_right: 'head',
   head_top: 'head',
+  left_wrist: 'leftLowerArm',
+  right_wrist: 'rightLowerArm',
+  other: 'spine',
 };
 
 const DEFAULT_ROTATION_BY_REGION: Record<AttachRegion, [number, number, number]> = {
@@ -19,6 +22,9 @@ const DEFAULT_ROTATION_BY_REGION: Record<AttachRegion, [number, number, number]>
   head_side_upper_left: [0, 0, -12],
   head_side_upper_right: [0, 0, 12],
   head_top: [0, 0, 0],
+  left_wrist: [0, 0, 90],
+  right_wrist: [0, 0, -90],
+  other: [0, 0, 0],
 };
 
 const HAIR_ACCESSORY_OFFSET_BY_REGION: Record<AttachRegion, [number, number, number]> = {
@@ -26,11 +32,14 @@ const HAIR_ACCESSORY_OFFSET_BY_REGION: Record<AttachRegion, [number, number, num
   head_side_upper_left: [-0.09, 0.12, 0.0],
   head_side_upper_right: [0.09, 0.12, 0.0],
   head_top: [0.0, 0.18, 0.0],
+  left_wrist: [0, 0, 0],
+  right_wrist: [0, 0, 0],
+  other: [0, 0, 0],
 };
 
 const CATEGORY_DEFAULTS: Record<AccessoryCategory, {
   attachRegion: AttachRegion;
-  scale: number;
+  scale: number | [number, number, number];
   offsetByRegion: Record<AttachRegion, [number, number, number]>;
 }> = {
   glasses: {
@@ -41,6 +50,9 @@ const CATEGORY_DEFAULTS: Record<AccessoryCategory, {
       head_side_upper_left: [0.01, 0.06, -0.03],
       head_side_upper_right: [0.01, 0.06, -0.03],
       head_top: [0.01, 0.06, -0.03],
+      left_wrist: [0, 0, 0],
+      right_wrist: [0, 0, 0],
+      other: [0, 0, 0],
     },
   },
   hairpin: {
@@ -58,6 +70,45 @@ const CATEGORY_DEFAULTS: Record<AccessoryCategory, {
     scale: 0.55,
     offsetByRegion: HAIR_ACCESSORY_OFFSET_BY_REGION,
   },
+  bracelet_left: {
+    attachRegion: 'left_wrist',
+    scale: 0.075,
+    offsetByRegion: {
+      face_center: [0, 0, 0],
+      head_side_upper_left: [0, 0, 0],
+      head_side_upper_right: [0, 0, 0],
+      head_top: [0, 0, 0],
+      left_wrist: [0, -0.01, 0.01], // Slight offset to simulate resting on the wrist
+      right_wrist: [0, 0, 0],
+      other: [0, 0, 0],
+    },
+  },
+  bracelet_right: {
+    attachRegion: 'right_wrist',
+    scale: 0.075,
+    offsetByRegion: {
+      face_center: [0, 0, 0],
+      head_side_upper_left: [0, 0, 0],
+      head_side_upper_right: [0, 0, 0],
+      head_top: [0, 0, 0],
+      left_wrist: [0, 0, 0],
+      right_wrist: [0, -0.01, 0.01],
+      other: [0, 0, 0],
+    },
+  },
+  other: {
+    attachRegion: 'other',
+    scale: 0.3,
+    offsetByRegion: {
+      face_center: [0, 0, 0],
+      head_side_upper_left: [0, 0, 0],
+      head_side_upper_right: [0, 0, 0],
+      head_top: [0, 0, 0],
+      left_wrist: [0, 0, 0],
+      right_wrist: [0, 0, 0],
+      other: [0, 0.1, 0],
+    },
+  },
 };
 
 export function resolveDefaultAnchorBone(region: AttachRegion): string {
@@ -68,7 +119,7 @@ export function resolveDefaultAttachmentSpec(
   category: AccessoryCategory,
   region?: AttachRegion,
 ): AccessoryAttachmentSpec {
-  const categoryDefaults = CATEGORY_DEFAULTS[category];
+  const categoryDefaults = CATEGORY_DEFAULTS[category] ?? CATEGORY_DEFAULTS['other'];
   const attachRegion = category === 'glasses'
     ? 'face_center'
     : (region ?? categoryDefaults.attachRegion);

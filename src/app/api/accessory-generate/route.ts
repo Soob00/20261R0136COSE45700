@@ -12,7 +12,7 @@ async function ensureDir(dir: string) {
   }
 }
 
-async function handleVarcoUpload(imageBuffer: Buffer, filename: string): Promise<string> {
+async function handleVarcoUpload(imageBuffer: ArrayBuffer, filename: string): Promise<string> {
   const apiKey = process.env.VARCO_API_KEY;
   if (!apiKey) throw new Error('VARCO_API_KEY is not set');
 
@@ -99,8 +99,7 @@ export async function POST(req: NextRequest) {
     } else if (type === 'image') {
       // 1. Submit to Varco
       const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const requestId = await handleVarcoUpload(buffer, file.name);
+      const requestId = await handleVarcoUpload(arrayBuffer, file.name);
 
       // 2. Poll for completion
       const modelUrl = await pollVarcoStatus(requestId);

@@ -142,8 +142,6 @@ const initialState: EditorState = {
   isLoading: false,
   error: null,
   customPresets: loadCustomPresetsFromStorage(),
-  baselineMorphTargets: {},
-  proposedStamps: null,
 };
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -345,14 +343,40 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   replaceSingleAccessory: ({ presetId, category }) => {
     pushUndo(get());
     const nextInstance = createAccessoryInstance(presetId, category);
-    set({
-      accessoryInstances: [nextInstance],
-      selectedAccessoryInstanceId: nextInstance.instanceId,
+    set((state) => {
+      const filtered = state.accessoryInstances.filter(
+        (inst) => inst.category !== category
+      );
+      return {
+        accessoryInstances: [...filtered, nextInstance],
+        selectedAccessoryInstanceId: nextInstance.instanceId,
+      };
     });
   },
 
   selectAccessory: (instanceId) => {
     set({ selectedAccessoryInstanceId: instanceId });
+  },
+
+  // --- Background Tasks ---
+  addBackgroundTask: (task) => {
+    set((state) => ({
+      backgroundTasks: [...state.backgroundTasks, task],
+    }));
+  },
+
+  updateBackgroundTask: (id, updates) => {
+    set((state) => ({
+      backgroundTasks: state.backgroundTasks.map((t) =>
+        t.id === id ? { ...t, ...updates } : t
+      ),
+    }));
+  },
+
+  removeBackgroundTask: (id) => {
+    set((state) => ({
+      backgroundTasks: state.backgroundTasks.filter((t) => t.id !== id),
+    }));
   },
 
   setAccessoryEnabled: (instanceId, enabled) => {
@@ -494,6 +518,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   canRedo: () => redoStack.length > 0,
 
   // --- Pipeline ---
+
+
   applyPipelineResult: (params) => {
     pushUndo(get());
     set((state) => ({
@@ -502,7 +528,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }));
   },
 
-  applyTextureResult: (textures) => {
+  applyTextureResult: (textures: Record<string, string>) => {
     pushUndo(get());
     set((state) => {
       const updated = { ...state.materials };
@@ -550,3 +576,70 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
 }));
+
+export async function runAccessoryGenerationTask(
+  taskId: string,
+  file: File,
+  category: import('@/types/accessory').AccessoryCategory,
+  accessoryName: string
+) {
+  const store = useEditorStore.getState();
+  
+  try {
+    store.updateBackgroundTask(taskId, { status: 'processing' });
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', file.name.toLowerCase().endsWith('.glb') ? 'glb' : 'image');
+
+    const res = await fetch('/api/accessory-generate', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to process accessory');
+    }
+
+    const data = await res.json();
+    
+    // Convert file to base64 so thumbnail persists across reloads
+    const getBase64 = (f: File): Promise<string> => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(f);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+
+    const isGlb = file.name.toLowerCase().endsWith('.glb');
+    const thumbnailUrl = isGlb ? '/placeholder.png' : await getBase64(file);
+    
+    // Add custom preset
+    store.addCustomPreset({
+      id: data.url, // Using url as ID for now
+      name: accessoryName.trim() || '커스텀 악세사리',
+      category: category as any, // Using preset category widening
+      thumbnailUrl,
+      meshUrl: data.url,
+    });
+
+    // Update task status to success and save the result URL
+    store.updateBackgroundTask(taskId, { status: 'success', resultUrl: data.url });
+
+    // Wait a brief moment for toast to appear, then equip it
+    setTimeout(() => {
+      useEditorStore.getState().replaceSingleAccessory({
+        presetId: data.url,
+        category: category,
+      });
+      // Optionally remove task after a few seconds
+      setTimeout(() => useEditorStore.getState().removeBackgroundTask(taskId), 5000);
+    }, 500);
+
+  } catch (err: any) {
+    store.updateBackgroundTask(taskId, { status: 'error', errorMessage: err.message });
+    // Remove error task after a while
+    setTimeout(() => useEditorStore.getState().removeBackgroundTask(taskId), 10000);
+  }
+}

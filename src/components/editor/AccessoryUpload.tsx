@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
-import { Upload, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
-import { useEditorStore } from '@/stores/editorStore';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, Loader2, CheckCircle2, AlertCircle, X, Image as ImageIcon } from 'lucide-react';
+import { useEditorStore, runAccessoryGenerationTask } from '@/stores/editorStore';
 import type { PresetItem } from '@/types/preset';
+import type { AccessoryCategory } from '@/types/accessory';
 
 type UploadStatus = 'idle' | 'pending' | 'uploading' | 'processing' | 'success' | 'error';
 
@@ -10,6 +11,8 @@ export function AccessoryUpload() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [accessoryName, setAccessoryName] = useState<string>('');
+  const [accessoryCategory, setAccessoryCategory] = useState<string>('glasses');
+  const [braceletSide, setBraceletSide] = useState<'left' | 'right'>('left');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceSingleAccessory = useEditorStore((s) => s.replaceSingleAccessory);
@@ -36,68 +39,71 @@ export function AccessoryUpload() {
     setErrorMessage('');
   };
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedFile && selectedFile.type.startsWith('image/')) {
+      const url = URL.createObjectURL(selectedFile);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setPreviewUrl(null);
+  }, [selectedFile]);
+
   const cancelUpload = () => {
     setSelectedFile(null);
     setAccessoryName('');
     setStatus('idle');
+    setPreviewUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleUploadSubmit = async () => {
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const backgroundTasks = useEditorStore((s) => s.backgroundTasks);
+
+  useEffect(() => {
+    if (currentTaskId && status === 'processing') {
+      const task = backgroundTasks.find((t) => t.id === currentTaskId);
+      if (!task) {
+        // Task removed (likely completed or timed out)
+        cancelUpload();
+      } else if (task.status === 'success') {
+        setStatus('success');
+        setTimeout(() => cancelUpload(), 3000);
+      } else if (task.status === 'error') {
+        setStatus('error');
+        setErrorMessage(task.errorMessage || '오류가 발생했습니다.');
+      }
+    }
+  }, [backgroundTasks, currentTaskId, status]);
+
+  const handleUploadSubmit = () => {
     if (!selectedFile) return;
 
-    const isGlb = selectedFile.name.toLowerCase().endsWith('.glb');
-    const type = isGlb ? 'glb' : 'image';
+    const finalCategory = (accessoryCategory === 'bracelet' 
+      ? `bracelet_${braceletSide}` 
+      : accessoryCategory) as AccessoryCategory;
+
+    const taskId = `task-${Date.now()}`;
+    setCurrentTaskId(taskId);
     
-    try {
-      setStatus(type === 'image' ? 'processing' : 'uploading');
-      setErrorMessage('');
+    useEditorStore.getState().addBackgroundTask({
+      id: taskId,
+      filename: selectedFile.name,
+      category: finalCategory,
+      status: 'uploading'
+    });
 
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('type', type);
+    // Run in background without awaiting
+    runAccessoryGenerationTask(taskId, selectedFile, finalCategory, accessoryName);
 
-      const res = await fetch('/api/accessory-generate', {
-        method: 'POST',
-        body: formData,
-      });
+    // Enter processing UI state
+    setStatus('processing');
+  };
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Upload failed');
-      }
-
-      setStatus('success');
-      
-      const customId = `custom-acc-${Date.now()}`;
-      
-      addCustomPreset({
-        id: data.url, // We use URL as id so the catalog resolves it
-        name: accessoryName.trim() || '커스텀 악세사리',
-        category: 'accessory',
-        thumbnailUrl: '', // Could generate a thumbnail, but leave empty for now
-        meshUrl: data.url,
-      });
-
-      // 장착
-      replaceSingleAccessory({
-        presetId: data.url,
-        category: 'glasses', // 임시로 모두 안경 카테고리로 지정
-      });
-
-      // 3초 후 초기화
-      setTimeout(() => {
-        setStatus('idle');
-        setSelectedFile(null);
-        setAccessoryName('');
-      }, 3000);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-
-    } catch (error: any) {
-      setStatus('error');
-      setErrorMessage(error.message || 'An error occurred');
-    }
+  const handleContinueInBackground = () => {
+    setCurrentTaskId(null);
+    cancelUpload();
   };
 
   return (
@@ -122,11 +128,36 @@ export function AccessoryUpload() {
               placeholder="이름을 입력하세요"
             />
           </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground mb-1 block">악세사리 종류</label>
+            <div className="flex gap-2">
+              <select
+                value={accessoryCategory}
+                onChange={(e) => setAccessoryCategory(e.target.value)}
+                className="w-full text-xs bg-background border border-border/50 rounded p-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="glasses">안경</option>
+                <option value="bracelet">팔찌</option>
+                <option value="other">기타</option>
+              </select>
+              
+              {accessoryCategory === 'bracelet' && (
+                <select
+                  value={braceletSide}
+                  onChange={(e) => setBraceletSide(e.target.value as 'left' | 'right')}
+                  className="w-full text-xs bg-background border border-border/50 rounded p-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="left">왼손</option>
+                  <option value="right">오른손</option>
+                </select>
+              )}
+            </div>
+          </div>
           <button 
             onClick={handleUploadSubmit}
             className="w-full mt-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md text-xs py-1.5 font-medium transition-colors"
           >
-            {selectedFile.name.toLowerCase().endsWith('.glb') ? 'GLB 업로드' : 'Varco 3D로 생성하기'}
+            {selectedFile.name.toLowerCase().endsWith('.glb') ? 'GLB 업로드' : '3D 악세사리 만들기'}
           </button>
         </div>
       ) : (
@@ -149,29 +180,41 @@ export function AccessoryUpload() {
               <p className="text-xs text-muted-foreground font-medium">클릭하거나 파일을 드래그하여 업로드</p>
               <p className="mt-1.5 text-[10px] text-muted-foreground/60 text-center max-w-[220px]">
                 추가하고 싶은 악세사리의 이미지나 glb 파일을 자유롭게 업로드 하세요.
+                <br/>
+                <span className="font-medium text-primary/70">악세사리만 단독으로 있는 이미지가 좋아요.</span>
               </p>
             </>
           )}
 
-          {status === 'uploading' && (
-            <div className="flex flex-col items-center gap-2 text-primary">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              <span className="text-xs font-medium">GLB 파일 업로드 중...</span>
-            </div>
-          )}
-
           {status === 'processing' && (
-            <div className="flex flex-col items-center gap-2 text-primary text-center">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              <span className="text-xs font-medium">악세사리 3D화 하는 중이에요.</span>
-              <span className="text-[10px] text-primary/60">입체화에는 약 2~3분 정도 걸려요</span>
-            </div>
-          )}
+            <div className="flex flex-col items-center w-full gap-4 relative">
+              {/* Scanning Preview */}
+              <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-primary/20 bg-black/20 flex items-center justify-center">
+                {previewUrl ? (
+                  <img src={previewUrl} className="w-full h-full object-cover opacity-60" alt="preview" />
+                ) : (
+                  <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                )}
+                {/* CSS Scanning Line Effect */}
+                <div className="absolute inset-0 z-10 pointer-events-none">
+                  <div className="w-full h-full relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-[2px] bg-primary shadow-[0_0_8px_2px_rgba(59,130,246,0.8)] animate-[scan_3.5s_ease-in-out_infinite]" />
+                    <div className="absolute top-0 left-0 w-full h-1/3 bg-gradient-to-b from-primary/30 to-transparent animate-[scan-fade_3.5s_ease-in-out_infinite]" />
+                  </div>
+                </div>
+              </div>
 
-          {status === 'success' && (
-            <div className="flex flex-col items-center gap-2 text-emerald-500">
-              <CheckCircle2 className="h-6 w-6" />
-              <span className="text-xs font-medium">성공적으로 적용되었습니다!</span>
+              <div className="flex flex-col items-center gap-1 text-center">
+                <span className="text-xs font-medium text-primary">3D 변환 작업 중...</span>
+                <span className="text-[10px] text-muted-foreground">이 작업은 약 2~3분 정도 소요될 수 있습니다.</span>
+              </div>
+              
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleContinueInBackground(); }}
+                className="mt-2 w-full px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-md text-xs font-medium transition-colors"
+              >
+                창 닫고 아바타 계속 꾸미기
+              </button>
             </div>
           )}
 
