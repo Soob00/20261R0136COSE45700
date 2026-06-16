@@ -52,7 +52,8 @@ const ThreeJSViewer = dynamic(
   { ssr: false }
 );
 
-const DEFAULT_MODEL_URL = (process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? '').replace(/\/$/, '') + '/public/models/CustomizableCharacter.vrm';
+const DEFAULT_MODEL_URL = (process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? '').replace(/\/$/, '') + '/models/CustomizableCharacter.vrm';
+// Force Turbopack cache invalidation
 
 
 const MORPH_LABELS: Record<string, string> = {
@@ -511,7 +512,7 @@ export default function DevViewerPage() {
                   className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-accent/50 text-muted-foreground rounded-lg hover:bg-accent hover:text-foreground transition-colors border border-border/30"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  {Object.keys(baselineMorphTargets).length > 0
+                  {Object.keys(baselineMorphTargets || {}).length > 0
                     ? '레퍼런스 기준으로 초기화'
                     : '전체 초기화'}
                 </button>

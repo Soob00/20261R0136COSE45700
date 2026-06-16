@@ -142,6 +142,11 @@ const initialState: EditorState = {
   isLoading: false,
   error: null,
   customPresets: loadCustomPresetsFromStorage(),
+  backgroundTasks: [],
+  baselineMorphTargets: {},
+  baselineBoneScales: {},
+  baselineMaterials: {},
+  proposedStamps: null,
 };
 
 export const useEditorStore = create<EditorStore>((set, get) => ({

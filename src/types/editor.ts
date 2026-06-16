@@ -98,6 +98,24 @@ export interface EditorState {
 
   // Background Tasks
   backgroundTasks: AccessoryTask[];
+
+  // Baseline VRM state (for resetting)
+  baselineMorphTargets: MorphTargetMap;
+  baselineBoneScales: BoneScaleMap;
+  baselineMaterials: MaterialMap;
+
+  // Proposed AI Stamps
+  proposedStamps: Record<string, ProposedStampItem[]> | null;
+}
+
+export interface ProposedStampItem {
+  shape: 'circle' | 'oval' | 'star' | 'heart' | 'diamond';
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  opacity: number;
+  rotation: number;
 }
 
 export interface AccessoryTask {
@@ -121,7 +139,6 @@ export interface EditorActions {
   // Materials
   setMaterial: (slotName: string, property: keyof MaterialSlot, value: string | number) => void;
   resetMaterials: () => void;
-  applyTextureResult: (textures: Record<string, string>) => void;
 
   // Versions
   saveVersion: (name?: string, thumbnailDataUrl?: string) => void;
