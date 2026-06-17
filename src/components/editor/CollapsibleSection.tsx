@@ -45,17 +45,19 @@ export function CollapsibleSection({
     <div>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center justify-between w-full py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+        className="flex items-center justify-between w-full px-2.5 py-2 rounded-xl text-[13px] font-bold text-foreground/80 hover:bg-accent/50 hover:text-foreground transition-colors"
         aria-expanded={open}
       >
-        <span>
+        <span className="flex items-center gap-1.5">
           {title}
           {count !== undefined && (
-            <span className="ml-1.5 text-muted-foreground/60">({count})</span>
+            <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold">
+              {count}
+            </span>
           )}
         </span>
         <ChevronDown
-          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+          className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${
             open ? '' : '-rotate-90'
           }`}
         />

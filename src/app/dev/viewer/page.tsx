@@ -16,6 +16,7 @@ import { ReferenceModelUpload } from '@/components/editor/ReferenceModelUpload';
 import { FaceFeatureApply } from '@/components/editor/FaceFeatureApply';
 import { SliderSearch } from '@/components/editor/SliderSearch';
 import { QuickPresets } from '@/components/editor/QuickPresets';
+import { MotionPanel } from '@/components/editor/MotionPanel';
 import BackgroundTasks from '@/components/editor/BackgroundTasks';
 import { ViewerToolbar } from '@/components/viewer/ViewerToolbar';
 import { useEditorStore } from '@/stores/editorStore';
@@ -42,8 +43,8 @@ import {
   Undo2,
   Redo2,
   Sparkles,
-  Box,
   Layers2,
+  PersonStanding,
 } from 'lucide-react';
 import type { ThreeJSViewerHandle } from '@/components/viewer/ThreeJSViewer';
 
@@ -141,15 +142,16 @@ const MORPH_RANGES: Record<string, { min: number; max: number }> = {
 };
 
 
-type TabId = 'face' | 'expressions' | 'material' | 'style' | 'version' | 'texture';
+type TabId = 'face' | 'expressions' | 'material' | 'style' | 'texture' | 'motion' | 'version';
 
 const TAB_CONFIG: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: 'face',        label: '얼굴',   icon: User    },
-  { id: 'style',       label: '스타일', icon: Shirt   },
-  { id: 'material',    label: '재질',   icon: Palette },
-  { id: 'texture',     label: '텍스처', icon: Layers2 },
-  { id: 'expressions', label: '표정',   icon: Smile   },
-  { id: 'version',     label: '버전',   icon: History },
+  { id: 'face',        label: '얼굴',   icon: User           },
+  { id: 'style',       label: '스타일', icon: Shirt          },
+  { id: 'material',    label: '재질',   icon: Palette        },
+  { id: 'texture',     label: '텍스처', icon: Layers2        },
+  { id: 'expressions', label: '표정',   icon: Smile          },
+  { id: 'motion',      label: '모션',   icon: PersonStanding },
+  { id: 'version',     label: '버전',   icon: History        },
 ];
 
 export default function DevViewerPage() {
@@ -381,21 +383,21 @@ export default function DevViewerPage() {
             <div className="px-4 py-4 border-b border-border/50 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/80 to-primary/40 flex items-center justify-center shadow-lg glow-primary">
-                    <Box className="w-4 h-4 text-primary-foreground" />
+                  <div className="w-9 h-9 rounded-2xl candy-gradient flex items-center justify-center shadow-pop animate-float">
+                    <Sparkles className="w-5 h-5 text-primary-foreground" />
                   </div>
                   <div>
-                    <h1 className="text-sm font-bold text-foreground tracking-tight">
+                    <h1 className="font-heading text-base font-bold text-foreground tracking-tight leading-none">
                       Avatar Studio
                     </h1>
-                    <p className="text-[10px] text-muted-foreground/70 font-medium tracking-wide uppercase">
-                      Character Designer
+                    <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">
+                      나만의 귀여운 캐릭터 ✨
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSidebarOpen(false)}
-                  className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+                  className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
                   title="패널 닫기 (S)"
                   aria-label="사이드바 닫기"
                 >
@@ -460,7 +462,7 @@ export default function DevViewerPage() {
             )}
 
             {/* --- Tabs --- */}
-            <div className="flex border-b border-border/50 shrink-0 overflow-x-auto scrollbar-none bg-card/50">
+            <div className="flex gap-1 px-3 py-2.5 border-b border-border/50 shrink-0 overflow-x-auto scrollbar-none">
               {TAB_CONFIG.map((tab, index) => {
                 const Icon = tab.icon;
                 const count = tabCounts[tab.id] || 0;
@@ -469,28 +471,25 @@ export default function DevViewerPage() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center justify-center gap-1 px-2.5 py-2.5 text-[11px] font-medium transition-all relative whitespace-nowrap shrink-0 ${
+                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-all whitespace-nowrap shrink-0 ${
                       isActive
-                        ? 'text-primary'
-                        : 'text-muted-foreground/70 hover:text-foreground'
+                        ? 'bg-primary text-primary-foreground shadow-soft'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
                     }`}
                     title={`${tab.label} (${index + 1})`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'drop-shadow-[0_0_4px_oklch(0.7_0.18_270/40%)]' : ''}`} />
+                    <Icon className="w-4 h-4" />
                     <span>{tab.label}</span>
                     {count > 0 && (
                       <span
-                        className={`text-[9px] min-w-[16px] text-center px-1 py-0.5 rounded-full font-medium ${
+                        className={`text-[10px] min-w-[18px] text-center px-1 py-0.5 rounded-full font-bold ${
                           isActive
-                            ? 'bg-primary/15 text-primary'
-                            : 'bg-muted/60 text-muted-foreground/60'
+                            ? 'bg-primary-foreground/25 text-primary-foreground'
+                            : 'bg-secondary text-secondary-foreground'
                         }`}
                       >
                         {count}
                       </span>
-                    )}
-                    {isActive && (
-                      <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full shadow-[0_0_8px_oklch(0.7_0.18_270/50%)]" />
                     )}
                   </button>
                 );
@@ -509,7 +508,7 @@ export default function DevViewerPage() {
                 />
                 <button
                   onClick={resetMorphTargets}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-accent/50 text-muted-foreground rounded-lg hover:bg-accent hover:text-foreground transition-colors border border-border/30"
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold bg-secondary text-secondary-foreground rounded-full hover:bg-accent hover:text-accent-foreground transition-colors"
                 >
                   <RotateCcw className="w-3 h-3" />
                   {Object.keys(baselineMorphTargets || {}).length > 0
@@ -522,16 +521,16 @@ export default function DevViewerPage() {
             {/* --- Tab Content --- */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
               {/* Loading state */}
-              {availableBones.length === 0 && expressionNames.length === 0 && !['version', 'style'].includes(activeTab) && (
+              {availableBones.length === 0 && expressionNames.length === 0 && !['version', 'style', 'motion'].includes(activeTab) && (
                 <div className="flex flex-col items-center justify-center py-16 text-center" role="status">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/30 flex items-center justify-center mb-4 animate-pulse motion-reduce:animate-none">
-                    <Upload className="w-6 h-6 text-primary/70" />
+                  <div className="w-16 h-16 rounded-3xl candy-gradient flex items-center justify-center mb-4 shadow-pop animate-float motion-reduce:animate-none">
+                    <Sparkles className="w-7 h-7 text-primary-foreground" />
                   </div>
-                  <p className="text-sm font-medium text-foreground/70">
-                    모델 로드 중...
+                  <p className="text-sm font-bold text-foreground/80">
+                    아바타를 불러오는 중이에요...
                   </p>
-                  <p className="text-[11px] text-muted-foreground/60 mt-1.5 max-w-[200px]">
-                    VRM 파일이 로드되면 편집 옵션이 표시됩니다
+                  <p className="text-[12px] text-muted-foreground mt-1.5 max-w-[210px] leading-relaxed">
+                    잠깐만 기다려 주세요! 곧 귀여운 편집 옵션이 나타나요 💕
                   </p>
                 </div>
               )}
@@ -646,6 +645,9 @@ export default function DevViewerPage() {
                 </>
               )}
 
+              {/* Motion Tab */}
+              {activeTab === 'motion' && <MotionPanel />}
+
               {/* Version Tab */}
               {activeTab === 'version' && (
                 <VersionPanel onCaptureScreenshot={handleCaptureScreenshot} />
@@ -653,15 +655,16 @@ export default function DevViewerPage() {
             </div>
 
             {/* --- Bottom Status Bar --- */}
-            <div className="px-4 py-2 border-t border-border/30 shrink-0 bg-card/30">
+            <div className="px-4 py-2.5 border-t border-border/40 shrink-0 bg-secondary/30">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] text-muted-foreground/70 font-mono">
+                <p className="text-[11px] font-bold text-foreground/70 flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${modifiedMorphCount > 0 ? 'bg-primary' : 'bg-mint'}`} />
                   {modifiedMorphCount > 0
-                    ? `${modifiedMorphCount} modified`
-                    : 'ready'}
+                    ? `${modifiedMorphCount}곳 꾸미는 중 💖`
+                    : '준비 완료!'}
                 </p>
-                <p className="text-[11px] text-muted-foreground/50 font-mono">
-                  R G S 1-5 | Ctrl+Z/S
+                <p className="text-[10px] text-muted-foreground/70 font-mono">
+                  R G S 1-5 · Ctrl+Z/S
                 </p>
               </div>
             </div>
@@ -693,7 +696,7 @@ export default function DevViewerPage() {
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="absolute top-3 left-3 z-10 p-2.5 rounded-xl glass border border-white/[0.06] text-white/50 hover:text-white/90 transition-all"
+            className="absolute top-3 left-3 z-10 p-2.5 rounded-2xl glass shadow-soft text-foreground/70 hover:text-primary transition-all"
             title="패널 열기 (S)"
             aria-label="사이드바 열기"
           >
@@ -721,16 +724,16 @@ export default function DevViewerPage() {
 
         {/* Drag overlay */}
         {isDragging && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-primary/5 backdrop-blur-sm border-2 border-dashed border-primary/40 rounded-xl m-3 pointer-events-none">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-primary/10 backdrop-blur-sm border-[3px] border-dashed border-primary/50 rounded-3xl m-3 pointer-events-none">
             <div className="flex flex-col items-center gap-3">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <Upload className="w-8 h-8 text-primary/60" />
+              <div className="w-20 h-20 rounded-3xl candy-gradient flex items-center justify-center shadow-pop animate-float">
+                <Upload className="w-9 h-9 text-primary-foreground" />
               </div>
-              <p className="text-sm font-medium text-primary/80">
-                VRM/GLB 파일을 여기에 드롭
+              <p className="text-base font-bold text-primary">
+                여기에 쏙! 놓아주세요 🎀
               </p>
-              <p className="text-xs text-primary/40">
-                모델을 교체합니다
+              <p className="text-xs font-semibold text-primary/60">
+                VRM / GLB 파일로 아바타를 바꿔요
               </p>
             </div>
           </div>
@@ -739,9 +742,9 @@ export default function DevViewerPage() {
         {/* Bottom info */}
         {!isDragging && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
-            <div className="px-3 py-1.5 rounded-full glass border border-white/[0.06] text-[11px] text-white/50 flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-400/70 animate-pulse motion-reduce:animate-none" />
-              VRM/GLB 드롭으로 모델 교체
+            <div className="px-3.5 py-1.5 rounded-full glass shadow-soft text-[11px] font-semibold text-foreground/60 flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-mint animate-pulse motion-reduce:animate-none" />
+              VRM/GLB 파일을 드롭하면 아바타가 바뀌어요
             </div>
           </div>
         )}

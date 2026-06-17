@@ -18,7 +18,7 @@ export function ViewerToolbar({
 
   return (
     <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
-      <div className="flex items-center gap-1 p-1 rounded-xl glass border border-white/[0.06]">
+      <div className="flex items-center gap-1 p-1.5 rounded-2xl glass shadow-soft">
         <ToolbarButton
           icon={<RotateCcw className="w-3.5 h-3.5" />}
           title="카메라 초기화 (R)"
@@ -32,7 +32,7 @@ export function ViewerToolbar({
           active={showGrid}
           shortcut="G"
         />
-        <div className="w-px h-4 bg-white/10 mx-0.5" />
+        <div className="w-px h-4 bg-border mx-0.5" />
         <ToolbarButton
           icon={theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
           title="테마 전환"
@@ -62,10 +62,10 @@ function ToolbarButton({
       title={title}
       aria-label={title}
       aria-pressed={active}
-      className={`relative p-2.5 rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+      className={`relative p-2.5 rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
         active
-          ? 'bg-primary/20 text-primary shadow-[0_0_12px_oklch(0.7_0.18_270/20%)]'
-          : 'text-white/50 hover:text-white/90 hover:bg-white/[0.08]'
+          ? 'bg-primary text-primary-foreground shadow-soft'
+          : 'text-foreground/60 hover:text-primary hover:bg-accent/60'
       }`}
     >
       {icon}

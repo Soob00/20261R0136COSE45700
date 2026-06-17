@@ -99,13 +99,13 @@ export function QuickPresets() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" />
+        <h3 className="text-[13px] font-bold text-foreground/80 flex items-center gap-1.5">
+          <Sparkles className="w-4 h-4 text-primary" />
           빠른 프리셋
         </h3>
         <button
           onClick={() => setShowSaveDialog(true)}
-          className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground border border-border/50 rounded hover:border-border transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-muted-foreground hover:text-primary border border-border rounded-full hover:border-primary/40 transition-colors"
         >
           <Plus className="w-2.5 h-2.5" />
           저장
@@ -157,10 +157,10 @@ export function QuickPresets() {
                 <div key={preset.id} className="group relative">
                   <button
                     onClick={() => applyPreset(preset)}
-                    className={`px-2.5 py-1.5 text-[11px] rounded-md transition-colors border ${
+                    className={`px-3 py-1.5 text-[11px] font-bold rounded-full transition-all border ${
                       activePreset === preset.id
-                        ? 'bg-primary/10 text-primary border-primary/40 ring-1 ring-primary/30'
-                        : 'bg-secondary text-secondary-foreground border-border/30 hover:bg-secondary/80'
+                        ? 'bg-primary text-primary-foreground border-transparent shadow-soft'
+                        : 'bg-card text-foreground/70 border-border hover:border-primary/40 hover:text-primary hover:-translate-y-0.5'
                     }`}
                     title={preset.description}
                   >
