@@ -51,7 +51,7 @@ export const ThreeJSViewer = forwardRef<ThreeJSViewerHandle, ThreeJSViewerProps>
           <OutfitAttachment />
           <AccessoryAttachment />
         </Suspense>
-        {showGrid && <gridHelper args={[10, 20, '#2a2540', '#1e1a30']} />}
+        {showGrid && <gridHelper args={[10, 20, '#f0a8d0', '#f6d0e6']} />}
         {showStats && <Stats />}
       </Canvas>
     );

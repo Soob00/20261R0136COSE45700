@@ -28,8 +28,8 @@ export function SliderSearch({
           type="text"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="슬라이더 검색..."
-          className="w-full pl-8 pr-8 py-2 text-xs bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors"
+          placeholder="무엇을 꾸며볼까요?"
+          className="w-full pl-8 pr-8 py-2 text-xs bg-card border border-border rounded-full text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-colors"
         />
         {searchQuery && (
           <button

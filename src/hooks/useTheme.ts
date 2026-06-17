@@ -5,11 +5,11 @@ import { useEffect, useState, useCallback } from 'react';
 type Theme = 'light' | 'dark';
 
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>('dark');
+  const [theme, setThemeState] = useState<Theme>('light');
 
   useEffect(() => {
     const saved = localStorage.getItem('avatar-editor-theme') as Theme | null;
-    const initial = saved || 'dark';
+    const initial = saved || 'light';
     setThemeState(initial);
     document.documentElement.classList.toggle('dark', initial === 'dark');
   }, []);

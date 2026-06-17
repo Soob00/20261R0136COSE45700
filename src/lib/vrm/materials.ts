@@ -1,15 +1,21 @@
 import type { VRM } from '@pixiv/three-vrm';
-import { MToonMaterial } from '@pixiv/three-vrm-materials-mtoon';
+import type { MToonMaterial } from '@pixiv/three-vrm-materials-mtoon';
 import * as THREE from 'three';
+
+// `instanceof MToonMaterial` can fail across bundler chunk boundaries (duplicate
+// module instances), so detect MToon materials by their `isMToonMaterial` flag instead.
+function isMToonMaterial(mat: THREE.Material): mat is MToonMaterial {
+  return (mat as { isMToonMaterial?: boolean }).isMToonMaterial === true;
+}
 
 export interface DetectedMaterial {
   slotName: string;
   label: string;
   category: 'skin' | 'hair' | 'eye' | 'cloth' | 'other';
   color: string; // hex
-  metalness: number;
-  roughness: number;
-  opacity: number;
+  shadingToony: number; // 0~1, 카툰 음영 강도 (0: 부드러운 그라데이션, 1: 또렷한 경계)
+  shadingShift: number; // -1~1, 명암 경계 위치 이동
+  rimLightingMix: number; // 0~1, 림 라이트(외곽광) 혼합 비율
   linkedSlots?: string[];
 }
 
@@ -101,16 +107,18 @@ export function detectMaterials(vrm: VRM): DetectedMaterial[] {
 
   for (const [name, { mat, category }] of matMap) {
     let color = '#ffffff';
-    let metalness = 0;
-    let roughness = 1;
+    let shadingToony = 0.9;
+    let shadingShift = 0;
+    let rimLightingMix = 1;
 
-    if (mat instanceof MToonMaterial) {
+    if (isMToonMaterial(mat)) {
       color = mat.color ? colorToHex(mat.color) : '#ffffff';
+      shadingToony = mat.shadingToonyFactor ?? 0.9;
+      shadingShift = mat.shadingShiftFactor ?? 0;
+      rimLightingMix = mat.rimLightingMixFactor ?? 1;
     } else {
       const std = mat as THREE.MeshStandardMaterial;
       if (std.color) color = colorToHex(std.color);
-      metalness = std.metalness ?? 0;
-      roughness = std.roughness ?? 1;
     }
 
     results.push({
@@ -118,9 +126,9 @@ export function detectMaterials(vrm: VRM): DetectedMaterial[] {
       label: `${categoryLabel(category)} (${name})`,
       category,
       color,
-      metalness,
-      roughness,
-      opacity: mat.opacity ?? 1,
+      shadingToony,
+      shadingShift,
+      rimLightingMix,
     });
 
     if (category === 'skin') skinSlots.push(name);
@@ -177,7 +185,7 @@ export function applySkinColor(vrm: VRM, hex: string): void {
       let success = false;
 
       // Method 1: MToonMaterial specific
-      if (mat instanceof MToonMaterial) {
+      if (isMToonMaterial(mat)) {
         mat.color.set(newColor);
         if (mat.shadeColorFactor) mat.shadeColorFactor.set(darkColor);
         // Direct uniform manipulation
@@ -254,7 +262,7 @@ export function applyMaterialColor(vrm: VRM, slotName: string, hex: string, isSk
     for (const mat of mats) {
       if (!mat || mat.name !== slotName) continue;
 
-      if (mat instanceof MToonMaterial) {
+      if (isMToonMaterial(mat)) {
         mat.color.copy(newColor);
         if (mat.uniforms?.['litFactor']) mat.uniforms['litFactor'].value.copy(newColor);
         mat.uniformsNeedUpdate = true;
@@ -270,7 +278,7 @@ export function applyMaterialColor(vrm: VRM, slotName: string, hex: string, isSk
 export function applyMaterialProperty(
   vrm: VRM,
   slotName: string,
-  property: 'metalness' | 'roughness' | 'opacity',
+  property: 'shadingToony' | 'shadingShift' | 'rimLightingMix',
   value: number
 ): void {
   vrm.scene.traverse((object) => {
@@ -279,16 +287,17 @@ export function applyMaterialProperty(
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     for (const mat of mats) {
       if (!mat || mat.name !== slotName) continue;
+      if (!isMToonMaterial(mat)) continue;
 
-      if (property === 'opacity') {
-        mat.opacity = value;
-        mat.transparent = value < 1;
-        mat.needsUpdate = true;
-      } else if (!(mat instanceof MToonMaterial)) {
-        const std = mat as THREE.MeshStandardMaterial;
-        std[property] = value;
-        std.needsUpdate = true;
+      if (property === 'shadingToony') {
+        mat.shadingToonyFactor = value;
+      } else if (property === 'shadingShift') {
+        mat.shadingShiftFactor = value;
+      } else if (property === 'rimLightingMix') {
+        mat.rimLightingMixFactor = value;
       }
+      mat.uniformsNeedUpdate = true;
+      mat.needsUpdate = true;
     }
   });
 }
