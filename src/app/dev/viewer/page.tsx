@@ -13,7 +13,6 @@ import { PresetGrid } from '@/components/editor/PresetGrid';
 import { AccessoryFitPanel } from '@/components/editor/AccessoryFitPanel';
 import { AccessoryUpload } from '@/components/editor/AccessoryUpload';
 import { ReferenceModelUpload } from '@/components/editor/ReferenceModelUpload';
-import { FaceFeatureApply } from '@/components/editor/FaceFeatureApply';
 import { SliderSearch } from '@/components/editor/SliderSearch';
 import { QuickPresets } from '@/components/editor/QuickPresets';
 import { MotionPanel } from '@/components/editor/MotionPanel';
@@ -639,7 +638,6 @@ export default function DevViewerPage() {
               {activeTab === 'style' && (
                 <>
                   <ReferenceModelUpload />
-                  <FaceFeatureApply />
                   <AccessoryUpload />
                   <PresetGrid />
                   <AccessoryFitPanel />

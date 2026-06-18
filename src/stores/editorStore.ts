@@ -147,7 +147,7 @@ const initialState: EditorState = {
   baselineBoneScales: {},
   baselineMaterials: {},
   proposedStamps: null,
-  selectedAnimationIndex: 0,
+  selectedAnimationIndex: -1,
   animationClipNames: [],
 };
 
