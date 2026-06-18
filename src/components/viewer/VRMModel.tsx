@@ -8,10 +8,12 @@ import { setBaseVRM } from '@/lib/vrm-ref';
 import { applyMaterialColor, applyMaterialProperty, applyMaterialTexture, detectMaterials } from '@/lib/vrm/materials';
 import type { DetectedMaterial } from '@/lib/vrm/materials';
 import type { VRM } from '@pixiv/three-vrm';
+import { useVRMAnimation } from '@/hooks/useVRMAnimation';
 import * as THREE from 'three';
 
 interface VRMModelProps {
   url: string;
+  animationUrl?: string;
   onLoaded?: (
     expressionNames: string[],
     morphTargetNames: string[],
@@ -20,8 +22,11 @@ interface VRMModelProps {
   ) => void;
 }
 
-export function VRMModel({ url, onLoaded }: VRMModelProps) {
+export function VRMModel({ url, animationUrl, onLoaded }: VRMModelProps) {
   const { vrm, expressionNames, morphTargetNames, error } = useVRM(url);
+  const selectedAnimationIndex = useEditorStore((s) => s.selectedAnimationIndex);
+  const setAnimationClipNames = useEditorStore((s) => s.setAnimationClipNames);
+  useVRMAnimation(vrm, animationUrl ?? null, selectedAnimationIndex, setAnimationClipNames);
   const vrmRef = useRef<VRM | null>(null);
   const onLoadedRef = useRef(onLoaded);
   onLoadedRef.current = onLoaded;

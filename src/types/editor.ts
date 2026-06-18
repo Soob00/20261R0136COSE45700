@@ -106,6 +106,10 @@ export interface EditorState {
 
   // Proposed AI Stamps
   proposedStamps: Record<string, ProposedStampItem[]> | null;
+
+  // Animation
+  selectedAnimationIndex: number;
+  animationClipNames: string[];
 }
 
 export interface ProposedStampItem {
@@ -201,6 +205,10 @@ export interface EditorActions {
   setProposedStamps: (stamps: Record<string, ProposedStampItem[]> | null) => void;
   /** Update a single slot's textureUrl without undo — used by stamp editor after render */
   setSlotTextureUrl: (slotId: string, url: string) => void;
+
+  // Animation
+  setSelectedAnimationIndex: (index: number) => void;
+  setAnimationClipNames: (names: string[]) => void;
 
   // Reset all
   resetAll: () => void;

@@ -147,6 +147,8 @@ const initialState: EditorState = {
   baselineBoneScales: {},
   baselineMaterials: {},
   proposedStamps: null,
+  selectedAnimationIndex: 0,
+  animationClipNames: [],
 };
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -580,6 +582,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setTemplateId: (id) => set({ templateId: id }),
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
+
+  setSelectedAnimationIndex: (index) => set({ selectedAnimationIndex: index }),
+  setAnimationClipNames: (names) => set({ animationClipNames: names }),
 }));
 
 export async function runAccessoryGenerationTask(
