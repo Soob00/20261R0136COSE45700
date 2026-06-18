@@ -19,6 +19,8 @@ const CLIP_LABELS: Record<string, string> = {
   run: '달리기',
 };
 
+const EXCLUDED_CLIPS = new Set(['웃']);
+
 function clipLabel(name: string) {
   return CLIP_LABELS[name] ?? name;
 }
@@ -72,6 +74,7 @@ export function MotionPanel() {
       </button>
 
       {clipNames.map((name, index) => {
+        if (EXCLUDED_CLIPS.has(name)) return null;
         const isActive = index === selectedIndex;
         return (
           <button

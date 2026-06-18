@@ -15,6 +15,32 @@ interface GltfData {
 interface AnimState {
   mixer: THREE.AnimationMixer;
   animatedBoneNames: Set<string>;
+  clipName: string;
+}
+
+// ── Finger curl helpers (module-level, allocated once) ────────────────────────
+// Left hand local -Z = +Z world, right hand local -Z = -Z world (mirrored skeleton).
+// Flexion (curl toward palm) needs opposite local-Z signs for each hand.
+const _curlCache = new Map<string, THREE.Quaternion | null>();
+const _fingerScratch = new THREE.Quaternion();
+
+function getFingerCurlQ(boneName: string): THREE.Quaternion | null {
+  if (_curlCache.has(boneName)) return _curlCache.get(boneName)!;
+  const mFinger = boneName.match(/J_Bip_([LR])_(Index|Middle|Ring|Little)([123])$/);
+  if (mFinger) {
+    const sign = mFinger[1] === 'L' ? 1 : -1;
+    const angle = mFinger[3] === '1' ? 0.40 : mFinger[3] === '2' ? 0.50 : 0.35;
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, sign), angle);
+    _curlCache.set(boneName, q); return q;
+  }
+  const mThumb = boneName.match(/J_Bip_([LR])_Thumb([123])$/);
+  if (mThumb) {
+    const sign = mThumb[1] === 'L' ? 1 : -1;
+    const angle = mThumb[2] === '1' ? 0.15 : mThumb[2] === '2' ? 0.30 : 0.20;
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, sign), angle);
+    _curlCache.set(boneName, q); return q;
+  }
+  _curlCache.set(boneName, null); return null;
 }
 
 /** Extract the Y-axis twist component of a quaternion (swing-twist decomposition). */
@@ -161,7 +187,7 @@ export function useVRMAnimation(
     stateRef.current?.mixer.stopAllAction();
     const mixer = new THREE.AnimationMixer(data.scene);
     mixer.clipAction(data.clips[idx]).play();
-    stateRef.current = { mixer, animatedBoneNames: data.animatedBonesByClip[idx] };
+    stateRef.current = { mixer, animatedBoneNames: data.animatedBonesByClip[idx], clipName: data.clips[idx].name };
     console.log(`[VRMAnimation] Playing "${data.clips[idx].name}"`);
   }
 
@@ -212,10 +238,17 @@ export function useVRMAnimation(
           vrm.scene.quaternion.copy(yTwist(deltaQ).invert().multiply(_faceForward));
         }
       } else {
-        // Unanimated bone (e.g. fingers): copy animation rest-pose local rotation.
-        // The GLB bakes Unity's natural hand curl into these rotations.
-        vrmBone.quaternion.copy(animObj.quaternion);
-        vrmWorldMap.set(animObj.name, parentWorldQ.clone().multiply(animObj.quaternion));
+        // Unanimated bone: apply natural finger curl except for clips that look better straight.
+        const applyCurl = !/mad|pickup/i.test(state.clipName);
+        const curlQ = applyCurl ? getFingerCurlQ(animObj.name) : null;
+        if (curlQ) {
+          _fingerScratch.copy(animObj.quaternion).multiply(curlQ);
+          vrmBone.quaternion.copy(_fingerScratch);
+          vrmWorldMap.set(animObj.name, parentWorldQ.clone().multiply(_fingerScratch));
+        } else {
+          vrmBone.quaternion.copy(animObj.quaternion);
+          vrmWorldMap.set(animObj.name, parentWorldQ.clone().multiply(animObj.quaternion));
+        }
       }
     });
   });
