@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { Upload, Loader2, CheckCircle2, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { Upload, Loader2, CheckCircle2, AlertCircle, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { loadVRM } from '@/lib/vrm/loader';
 import { detectMaterials } from '@/lib/vrm/materials';
 import { recommendHairPreset, recommendHairPresetFromImage, matchHairPresetsFromColor, hexToHsl } from '@/lib/hair-matching';
 import { PRESET_ITEMS } from '@/data/presets';
 import { useEditorStore } from '@/stores/editorStore';
 import type { HairRecommendation } from '@/types/editor';
-import type { TextureResult, HairMatchResult, PipelineResult } from '@/types/pipeline';
+import type { TextureResult, HairMatchResult, PipelineResult, TemplateName } from '@/types/pipeline';
 import * as THREE from 'three';
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
@@ -20,10 +20,22 @@ interface Result {
   extractedColor: string;
 }
 
+interface FaceResult {
+  template: TemplateName;
+  confidence: number;
+  appliedCount: number;
+}
+
 const CONFIDENCE_LABELS: Record<string, string> = {
   high: '높음',
   medium: '보통',
   low: '낮음',
+};
+
+const TEMPLATE_LABELS: Record<TemplateName, string> = {
+  cute: '큐트',
+  slim: '슬림',
+  mature: '매추어',
 };
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.bmp'];
@@ -46,6 +58,8 @@ export function ReferenceModelUpload() {
   const [geminiFallback, setGeminiFallback] = useState(false);
 
   const [result, setResult] = useState<Result | null>(null);
+  const [faceResult, setFaceResult] = useState<FaceResult | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -93,8 +107,15 @@ export function ReferenceModelUpload() {
       setTextureStatus('loading');
 
       setResult(null);
+      setFaceResult(null);
       setErrorMsg('');
       setGeminiFallback(false);
+
+      // Image preview (faint backdrop in the drop zone)
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(file);
+      });
 
       // Run hair matching (client) and texture pipeline (server) in parallel
       const hairPromise = recommendHairPresetFromImage(file);
@@ -230,6 +251,11 @@ export function ReferenceModelUpload() {
         if (textureFaceKeys?.status === 'ok' && textureFaceKeys.avatar_parameters) {
           applyPipelineResult(textureFaceKeys.avatar_parameters);
           faceKeysApplied = true;
+          setFaceResult({
+            template: (textureFaceKeys.template ?? 'cute') as TemplateName,
+            confidence: textureFaceKeys.confidence ?? 0,
+            appliedCount: Object.keys(textureFaceKeys.avatar_parameters).length,
+          });
           console.log(`[ReferenceUpload] Face keys applied (with Gemini corrections): ${Object.keys(textureFaceKeys.avatar_parameters).length} parameters (template: ${textureFaceKeys.template})`);
         }
       }
@@ -239,6 +265,11 @@ export function ReferenceModelUpload() {
         const faceKeys = faceKeysResult.value;
         if (faceKeys.status === 'ok' && faceKeys.avatar_parameters) {
           applyPipelineResult(faceKeys.avatar_parameters);
+          setFaceResult({
+            template: (faceKeys.template ?? 'cute') as TemplateName,
+            confidence: faceKeys.confidence ?? 0,
+            appliedCount: Object.keys(faceKeys.avatar_parameters).length,
+          });
           console.log(`[ReferenceUpload] Face keys applied (standalone): ${Object.keys(faceKeys.avatar_parameters).length} parameters (template: ${faceKeys.template})`);
         } else {
           console.warn('[ReferenceUpload] Face keys extraction failed:', faceKeys.error);
@@ -255,7 +286,13 @@ export function ReferenceModelUpload() {
     async (file: File) => {
       setStatus('loading');
       setResult(null);
+      setFaceResult(null);
       setErrorMsg('');
+      // 3D models have no image preview
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
 
       const blobUrl = URL.createObjectURL(file);
 
@@ -328,15 +365,34 @@ export function ReferenceModelUpload() {
     [processFile],
   );
 
+  const handleReset = useCallback(() => {
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setStatus('idle');
+    setTextureStatus('idle');
+    setResult(null);
+    setFaceResult(null);
+    setErrorMsg('');
+    setGeminiFallback(false);
+  }, []);
+
+  const isLoading = status === 'loading' || textureStatus === 'loading';
+  const hasResult = status === 'success' || status === 'error';
   const acceptAttr = ACCEPTED_EXTENSIONS.join(',');
 
   return (
     <div className="space-y-2">
-      <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+      <label className="text-[13px] font-bold text-foreground/80 flex items-center gap-1.5">
+        <Sparkles className="w-3.5 h-3.5 text-primary" />
         레퍼런스 업로드
       </label>
+      <p className="text-[11px] text-muted-foreground/80 leading-relaxed -mt-0.5">
+        얼굴 사진 또는 VRM/GLB 하나로 <b className="text-foreground/70">얼굴·헤어·텍스처</b>를 한 번에 적용해요
+      </p>
 
-      {/* Drop zone */}
+      {/* Drop zone (with faint image preview) */}
       <div
         onDrop={handleDrop}
         onDragOver={(e) => {
@@ -347,13 +403,13 @@ export function ReferenceModelUpload() {
           e.preventDefault();
           setIsDragging(false);
         }}
-        onClick={() => status !== 'loading' && textureStatus !== 'loading' && inputRef.current?.click()}
-        className={`relative flex flex-col items-center justify-center gap-1.5 px-3 py-4 rounded-lg border border-dashed cursor-pointer transition-all ${
+        onClick={() => !isLoading && inputRef.current?.click()}
+        className={`relative flex flex-col items-center justify-center gap-1.5 px-3 py-4 rounded-xl border border-dashed cursor-pointer transition-all overflow-hidden ${
           isDragging
             ? 'border-primary/60 bg-primary/5'
-            : status === 'loading' || textureStatus === 'loading'
+            : isLoading
             ? 'border-border/30 bg-muted/10 cursor-wait'
-            : 'border-border/40 bg-muted/10 hover:border-border/60 hover:bg-muted/20'
+            : 'border-border/50 bg-muted/10 hover:border-primary/40 hover:bg-accent/20'
         }`}
       >
         <input
@@ -364,40 +420,56 @@ export function ReferenceModelUpload() {
           className="hidden"
         />
 
-        {status === 'loading' || textureStatus === 'loading' ? (
-          <>
-            <Loader2 className="w-5 h-5 text-primary animate-spin" />
-            <span className="text-[11px] text-muted-foreground">
-              {status === 'loading' && textureStatus === 'loading'
-                ? '헤어 매칭 + 텍스처 생성 중...'
-                : textureStatus === 'loading'
-                ? '텍스처 생성 중...'
-                : '분석 중...'}
-            </span>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-1.5">
-              <ImageIcon className="w-4 h-4 text-muted-foreground/50" />
-              <Upload className="w-4 h-4 text-muted-foreground/50" />
-            </div>
-            <span className="text-[11px] text-muted-foreground">
-              이미지 또는 VRM/GLB로 헤어 자동 매칭
-            </span>
-            <span className="text-[9px] text-muted-foreground/50">
-              PNG, JPG, WebP, VRM, GLB
-            </span>
-          </>
+        {previewUrl && (
+          <div className="absolute inset-0 opacity-15">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={previewUrl} alt="" className="w-full h-full object-cover" />
+          </div>
         )}
+
+        <div className="relative z-10 flex flex-col items-center gap-1.5">
+          {isLoading ? (
+            <>
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+              <span className="text-[11px] text-muted-foreground">
+                {status === 'loading' && textureStatus === 'loading'
+                  ? '얼굴·헤어·텍스처 분석 중...'
+                  : textureStatus === 'loading'
+                  ? '텍스처 생성 중...'
+                  : '분석 중...'}
+              </span>
+            </>
+          ) : previewUrl ? (
+            <>
+              <Sparkles className="w-5 h-5 text-primary/70" />
+              <span className="text-[11px] text-muted-foreground">
+                다른 파일로 교체하려면 클릭
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-muted-foreground/50" />
+                <Upload className="w-4 h-4 text-muted-foreground/50" />
+              </div>
+              <span className="text-[11px] text-muted-foreground">
+                얼굴 사진 또는 VRM/GLB를 드롭하거나 클릭
+              </span>
+              <span className="text-[9px] text-muted-foreground/50">
+                PNG, JPG, WebP, VRM, GLB
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Result message */}
+      {/* Hair / texture result */}
       {status === 'success' && result && (
-        <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+        <div className="flex items-start gap-2 px-2.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             <p className="text-[11px] text-foreground/80 font-medium">
-              {result.presetName} 적용됨
+              헤어: {result.presetName} 적용됨
             </p>
             <div className="flex items-center gap-2">
               <div
@@ -423,13 +495,40 @@ export function ReferenceModelUpload() {
             {textureStatus === 'error' && (
               <span className="text-[10px] text-amber-500">텍스처 생성 실패 (헤어만 적용됨)</span>
             )}
-
           </div>
         </div>
       )}
 
+      {/* Face feature result */}
+      {faceResult && (
+        <div className="flex items-start gap-2 px-2.5 py-2 rounded-xl bg-primary/10 border border-primary/20">
+          <Sparkles className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="text-[11px] text-foreground/80 font-medium">
+              얼굴 특징 {faceResult.appliedCount}개 적용됨
+            </p>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <span>템플릿: {TEMPLATE_LABELS[faceResult.template] ?? faceResult.template}</span>
+              <span className="text-muted-foreground/40">|</span>
+              <span>신뢰도: {(faceResult.confidence * 100).toFixed(1)}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset */}
+      {hasResult && (
+        <button
+          onClick={handleReset}
+          className="w-full px-2.5 py-1.5 text-[11px] font-bold text-muted-foreground hover:text-foreground rounded-full border border-border/50 hover:bg-accent/40 transition-colors"
+        >
+          초기화
+        </button>
+      )}
+
+      {/* Error */}
       {status === 'error' && errorMsg && (
-        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-destructive/10 border border-destructive/20">
+        <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-destructive/10 border border-destructive/20">
           <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
           <p className="text-[11px] text-destructive/80">{errorMsg}</p>
         </div>
