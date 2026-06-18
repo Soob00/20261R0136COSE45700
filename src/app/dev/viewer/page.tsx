@@ -54,6 +54,7 @@ const ThreeJSViewer = dynamic(
 );
 
 const DEFAULT_MODEL_URL = (process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? '').replace(/\/$/, '') + '/models/CustomizableCharacter.vrm';
+const ANIMATION_URL = (process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? '').replace(/\/$/, '') + '/models/CharacterAnim.glb';
 // Force Turbopack cache invalidation
 
 
@@ -716,6 +717,7 @@ export default function DevViewerPage() {
           <ThreeJSViewer
             ref={viewerRef}
             modelUrl={modelUrl}
+            animationUrl={ANIMATION_URL}
             onModelLoaded={handleModelLoaded}
             showStats={false}
             showGrid={showGrid}

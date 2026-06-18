@@ -13,6 +13,7 @@ import type { DetectedMaterial } from '@/lib/vrm/materials';
 
 interface ThreeJSViewerProps {
   modelUrl: string;
+  animationUrl?: string;
   onModelLoaded?: (
     expressionNames: string[],
     morphTargetNames: string[],
@@ -28,7 +29,7 @@ export interface ThreeJSViewerHandle {
 }
 
 export const ThreeJSViewer = forwardRef<ThreeJSViewerHandle, ThreeJSViewerProps>(
-  function ThreeJSViewer({ modelUrl, onModelLoaded, showStats = false, showGrid = true }, ref) {
+  function ThreeJSViewer({ modelUrl, animationUrl, onModelLoaded, showStats = false, showGrid = true }, ref) {
     const cameraControlsRef = useRef<{ reset: () => void }>(null);
 
     useImperativeHandle(ref, () => ({
@@ -46,7 +47,7 @@ export const ThreeJSViewer = forwardRef<ThreeJSViewerHandle, ThreeJSViewerProps>
         <SceneLighting />
         <CameraControls ref={cameraControlsRef} />
         <Suspense fallback={null}>
-          <VRMModel url={modelUrl} onLoaded={onModelLoaded} />
+          <VRMModel url={modelUrl} animationUrl={animationUrl} onLoaded={onModelLoaded} />
           <HairAttachment />
           <OutfitAttachment />
           <AccessoryAttachment />
